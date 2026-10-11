@@ -7,6 +7,8 @@
     <string name="entry_type_webtoon">條漫</string>
     <!-- Preferences -->
     <!-- Subsections -->
+    <string name="pref_category_fork">Fork 設定</string>
+    <string name="recheck_login_status">重新檢查登入狀態</string>
     <!-- About -->
     <string name="changelog_version">版本 %1$s</string>
     <!-- EH Settings 1 -->
@@ -44,6 +46,12 @@
     <string name="reader_bottom_buttons">閱讀器底部按鈕</string>
     <string name="reader_bottom_buttons_summary">自訂顯示在閱讀器底部的按鈕</string>
     <string name="pref_smooth_scroll">平滑自動翻頁</string>
+    <!-- Komiho: 條頁點擊捲動的第二套動畫（緩出 + 時長依距離計算），與「等速動畫」互斥 -->
+    <string name="pref_page_transitions_linear">等速動畫</string>
+    <string name="pref_page_transitions_v2">緩出動畫</string>
+    <string name="pref_page_transitions_v2_summary">緩出捲動，時長依捲動距離自動計算，與「等速動畫」互斥。開啟後時長滑桿不再生效。</string>
+    <string name="pref_page_transitions_v2_speed">緩出動畫速度</string>
+    <string name="pref_page_transitions_v2_speed_summary">每螢幕基準毫秒數，越小越快 · 目前 %s</string>
     <!-- Reader -->
     <!-- Reader Actions -->
     <string name="eh_autoscroll">自動翻頁</string>
@@ -73,6 +81,9 @@
     <string name="action_share_second_page">分享第二頁</string>
     <string name="action_save_combined_page">儲存合併頁面</string>
     <string name="action_share_combined_page">分享合併頁面</string>
+    <string name="action_copy_first_page">複製第一頁</string>
+    <string name="action_copy_second_page">複製第二頁</string>
+    <string name="action_copy_combined_page">複製合併頁面</string>
     <!-- Reader Sharing -->
     <string name="share_pages_info">%1$s: %2$s, 頁 %3$s</string>
     <!-- Auto Webtoon Mode -->

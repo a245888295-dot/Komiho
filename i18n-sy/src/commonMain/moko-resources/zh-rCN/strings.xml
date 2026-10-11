@@ -7,6 +7,8 @@
     <string name="entry_type_webtoon">条漫</string>
     <!-- Preferences -->
     <!-- Subsections -->
+    <string name="pref_category_fork">Fork 设置</string>
+    <string name="recheck_login_status">重新检查登录状态</string>
     <!-- About -->
     <string name="changelog_version">版本 %1$s</string>
     <!-- EH Settings -->
@@ -15,6 +17,9 @@
     <string name="custom_igneous_cookie">自定义 igneous cookie</string>
     <string name="custom_igneous_cookie_message">某些用户无法正常访问 ExHentai，必须输入特定的 igneous cookie，此选项为这些用户设计。</string>
     <!-- Advanced Settings -->
+    <!-- Security settings -->
+    <string name="aes_128">AES 128</string>
+    <string name="standard_zip_encryption">标准 zip 加密（快速但不安全）</string>
     <!-- Backup settings -->
     <string name="custom_entry_info">自定义作品信息</string>
     <!-- Reader Settings -->
@@ -83,6 +88,9 @@
     <string name="action_share_second_page">分享第二页</string>
     <string name="action_save_combined_page">保存合并页面</string>
     <string name="action_share_combined_page">分享合并页面</string>
+    <string name="action_copy_first_page">复制第一页</string>
+    <string name="action_copy_second_page">复制第二页</string>
+    <string name="action_copy_combined_page">复制合并页面</string>
     <!-- Reader Sharing -->
     <string name="share_pages_info">%1$s：%2$s，第 %3$s 页</string>
     <!-- Auto Webtoon Mode -->
