@@ -137,6 +137,8 @@
     <string name="pref_reader_theme">背景颜色</string>
     <string name="white_background">白色</string>
     <string name="black_background">黑色</string>
+    <string name="parchment_background">羊皮纸</string>
+    <string name="kraft_background">牛皮纸</string>
     <string name="pref_viewer_type">默认阅读模式</string>
     <string name="left_to_right_viewer">单页式（从左到右）</string>
     <string name="right_to_left_viewer">单页式（从右到左）</string>

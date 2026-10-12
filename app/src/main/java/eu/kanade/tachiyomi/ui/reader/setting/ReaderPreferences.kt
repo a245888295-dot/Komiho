@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.setting
 
+import android.graphics.Color
+import android.graphics.ColorMatrix
 import android.os.Build
 import androidx.compose.ui.graphics.BlendMode
 import dev.icerock.moko.resources.StringResource
@@ -473,6 +475,88 @@ class ReaderPreferences(
         const val LOAD_FROM_FILE = 0
         const val LOAD_INTO_MEMORY = 1
         const val CACHE_TO_DISK = 2
+    }
+
+    /**
+     * Komiho: 阅读器背景档位（`pref_reader_theme_key`）。
+     *
+     * 羊皮纸/牛皮纸是「纸化」档位而非纯衬底：除容器贴纸纹 drawable 外，
+     * 页面还会过一层 [buildPaperMatrix] 纸色滤镜（见 `ReaderActivity.setLayerPaint`），
+     * 白场漫画的纸面变为纸色，与容器衬底同色衔接。
+     *
+     * 档位 4 复用历史值安全：Migration 18（RemoveOldReaderThemeMigration）已把旧值 4
+     * 一次性迁移为 3，之后不会再有用户持有旧 4。
+     */
+    object ReaderTheme {
+        const val WHITE = 0
+        const val BLACK = 1
+        const val GRAY = 2
+        const val AUTOMATIC = 3
+        const val PARCHMENT = 4
+        const val KRAFT = 5
+
+        /**
+         * 纸化档位参数：
+         * - [whiteColor]：纸色（白场映射目标，须与纸纹 PNG 均值一致，页面与 letterbox 才能同色衔接）；
+         * - [blackColor]：暖深色（黑场映射目标）；
+         * - [chromaKeep]：彩度保留系数，彩色像素保留的原始彩度比例。
+         */
+        data class PaperStyle(val whiteColor: Int, val blackColor: Int, val chromaKeep: Float)
+
+        val PARCHMENT_STYLE = PaperStyle(
+            whiteColor = Color.rgb(0xEF, 0xE3, 0xC8),
+            blackColor = Color.rgb(0x2B, 0x22, 0x18),
+            chromaKeep = 0.35f,
+        )
+
+        val KRAFT_STYLE = PaperStyle(
+            whiteColor = Color.rgb(0xC6, 0xAA, 0x7C),
+            blackColor = Color.rgb(0x34, 0x26, 0x18),
+            chromaKeep = 0.35f,
+        )
+
+        fun paperStyleOf(theme: Int): PaperStyle? = when (theme) {
+            PARCHMENT -> PARCHMENT_STYLE
+            KRAFT -> KRAFT_STYLE
+            else -> null
+        }
+
+        /**
+         * 纸色坡道矩阵：`out_c = K_c + (P_c - K_c) * L + s * (orig_c - L)`，
+         * 其中 `L = 0.299R + 0.587G + 0.114B`。
+         *
+         * 白 → 纸色、黑 → 暖深色、中间调沿坡道过渡，彩色像素保留 [PaperStyle.chromaKeep]
+         * 比例彩度（避免彩漫被完全去色）。Android ColorMatrix 通道取值 0-255、偏移列同量纲。
+         */
+        fun buildPaperMatrix(style: PaperStyle): ColorMatrix {
+            val luminance = floatArrayOf(0.299f, 0.587f, 0.114f)
+            val white = intArrayOf(
+                Color.red(style.whiteColor),
+                Color.green(style.whiteColor),
+                Color.blue(style.whiteColor),
+            )
+            val black = intArrayOf(
+                Color.red(style.blackColor),
+                Color.green(style.blackColor),
+                Color.blue(style.blackColor),
+            )
+            val chromaKeep = style.chromaKeep
+            val m = FloatArray(20)
+            for (c in 0..2) {
+                val ramp = (white[c] - black[c]) / 255f - chromaKeep
+                for (j in 0..2) {
+                    m[c * 5 + j] = ramp * luminance[j] + if (j == c) chromaKeep else 0f
+                }
+                m[c * 5 + 3] = 0f
+                m[c * 5 + 4] = black[c].toFloat()
+            }
+            m[15] = 0f
+            m[16] = 0f
+            m[17] = 0f
+            m[18] = 1f
+            m[19] = 0f
+            return ColorMatrix(m)
+        }
     }
 
     companion object {

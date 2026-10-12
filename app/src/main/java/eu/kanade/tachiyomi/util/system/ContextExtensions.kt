@@ -114,6 +114,7 @@ fun Context.createReaderThemeContext(): Context {
             ThemeMode.SYSTEM -> applicationContext.isNightMode()
             else -> themeMode == ThemeMode.DARK
         }
+        // Komiho: 4/5 = 羊皮纸/牛皮纸，固定浅色纸纹，与白色同样归入 else（浅色 → 夜间模式 NO）
         else -> false // White
     }
     val expected = if (isDarkBackground) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO

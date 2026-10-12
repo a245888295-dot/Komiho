@@ -52,6 +52,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import androidx.core.graphics.Insets
 import androidx.core.net.toUri
@@ -96,6 +97,7 @@ import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.model.ViewerChapters
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences.ReaderTheme
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsScreenModel
 import mihon.core.common.archive.ArchivePasswordException
 import eu.kanade.tachiyomi.util.pdf.PdfPasswordException
@@ -1664,7 +1666,15 @@ class ReaderActivity : BaseActivity() {
      */
     private inner class ReaderConfig {
 
-        private fun getCombinedPaint(grayscale: Boolean, invertedColors: Boolean): Paint {
+        /**
+         * Komiho: 页面图层滤镜。叠加顺序：先灰度/反色，后纸色坡道（纸色为最终视觉，
+         * 保证纸档下页面与容器衬底同色）。纸色走 ColorMatrix 坡道映射，不进解码通道。
+         */
+        private fun getCombinedPaint(
+            grayscale: Boolean,
+            invertedColors: Boolean,
+            paperStyle: ReaderTheme.PaperStyle?,
+        ): Paint {
             return Paint().apply {
                 colorFilter = ColorMatrixColorFilter(
                     ColorMatrix().apply {
@@ -1683,6 +1693,7 @@ class ReaderActivity : BaseActivity() {
                                 ),
                             )
                         }
+                        paperStyle?.let { postConcat(ReaderTheme.buildPaperMatrix(it)) }
                     },
                 )
             }
@@ -1690,21 +1701,37 @@ class ReaderActivity : BaseActivity() {
 
         private val grayBackgroundColor = Color.rgb(0x20, 0x21, 0x25)
 
+        /**
+         * Komiho: 按阅读器背景档位设置容器衬底。纸化档位（羊皮纸/牛皮纸）贴无缝平铺
+         * 纸纹，与页面纸色滤镜（[setLayerPaint]）的白场同色衔接；其余维持纯色。
+         */
+        private fun applyReaderBackground(theme: Int) {
+            val paperDrawableRes = when (theme) {
+                ReaderTheme.PARCHMENT -> R.drawable.reader_bg_parchment
+                ReaderTheme.KRAFT -> R.drawable.reader_bg_kraft
+                else -> null
+            }
+            if (paperDrawableRes != null) {
+                binding.readerContainer.background =
+                    ContextCompat.getDrawable(this@ReaderActivity, paperDrawableRes)
+            } else {
+                binding.readerContainer.setBackgroundColor(
+                    when (theme) {
+                        ReaderTheme.WHITE -> Color.WHITE
+                        ReaderTheme.GRAY -> grayBackgroundColor
+                        ReaderTheme.AUTOMATIC -> automaticBackgroundColor()
+                        else -> Color.BLACK
+                    },
+                )
+            }
+        }
+
         /*
          * Initializes the reader subscriptions.
          */
         init {
             readerPreferences.readerTheme.changes()
-                .onEach { theme ->
-                    binding.readerContainer.setBackgroundColor(
-                        when (theme) {
-                            0 -> Color.WHITE
-                            2 -> grayBackgroundColor
-                            3 -> automaticBackgroundColor()
-                            else -> Color.BLACK
-                        },
-                    )
-                }
+                .onEach { theme -> applyReaderBackground(theme) }
                 .launchIn(lifecycleScope)
 
             preferences.displayProfile.changes()
@@ -1722,9 +1749,11 @@ class ReaderActivity : BaseActivity() {
             combine(
                 readerPreferences.grayscale.changes(),
                 readerPreferences.invertedColors.changes(),
-            ) { grayscale, invertedColors -> grayscale to invertedColors }
-                .onEach { (grayscale, invertedColors) ->
-                    setLayerPaint(grayscale, invertedColors)
+                // Komiho: 背景档位也要进滤镜流——纸化档位（羊皮纸/牛皮纸）需要叠纸色矩阵。
+                readerPreferences.readerTheme.changes(),
+            ) { grayscale, invertedColors, theme -> Triple(grayscale, invertedColors, theme) }
+                .onEach { (grayscale, invertedColors, theme) ->
+                    setLayerPaint(grayscale, invertedColors, theme)
                 }
                 .launchIn(lifecycleScope)
 
@@ -1850,15 +1879,18 @@ class ReaderActivity : BaseActivity() {
             viewModel.setBrightnessOverlayValue(value)
         }
 
-        private fun setLayerPaint(grayscale: Boolean, invertedColors: Boolean) {
+        private fun setLayerPaint(grayscale: Boolean, invertedColors: Boolean, theme: Int) {
             // Komiho: E-Ink 灰阶化开启时，「灰度」这一项必须让位 ——
             // 我们的量化已经把像素压到面板的 16 级真实档位，再套一层
             // ColorMatrix.setSaturation(0) 就是**二次**非线性压缩，层次会塌掉
             // （表现是整页发灰、发闷）。反色（黑白墨水屏上的常用功能）不受影响，
             // 它作用在已量化的像素上且语义不同。
             val effectiveGrayscale = grayscale && !Injekt.get<UiPreferences>().isEinkGrayscaleActive
-            val paint = if (effectiveGrayscale || invertedColors) {
-                getCombinedPaint(effectiveGrayscale, invertedColors)
+            // Komiho: 纸化档位（羊皮纸/牛皮纸）在既有滤镜之后再叠一层纸色坡道，
+            // 白场漫画的纸面变为纸色；不进解码通道，仅合成层生效。
+            val paperStyle = ReaderTheme.paperStyleOf(theme)
+            val paint = if (effectiveGrayscale || invertedColors || paperStyle != null) {
+                getCombinedPaint(effectiveGrayscale, invertedColors, paperStyle)
             } else {
                 null
             }
