@@ -62,6 +62,8 @@ import eu.kanade.tachiyomi.di.initExpensiveComponents
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.base.delegate.SecureActivityDelegate
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences.ReaderTheme
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.EinkMotion
 import eu.kanade.tachiyomi.util.system.EinkReaderDefaults
@@ -133,6 +135,22 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         InjektKoinBridge.startKoin(this)
         initExpensiveComponents(this)
         // SY <--
+
+        // Komiho (2026-10-12): 「自动」背景档位已从设置入口隐藏（底层智能取色逻辑保留，见
+        // ReaderTheme.AUTOMATIC），存量用户一次性收敛到黑色。幂等：只在值仍是 3 时写一次。
+        // E-Ink 备份里的原值也要一起收敛，否则关闭 E-Ink 还原时会把已隐藏的档位放回来。
+        // 放在这里而非迁移框架：本 fork 的 versionCode 与继承来的迁移版本号不同轨，且 CI 包与
+        // 正式包共用 versionCode（old == new 时迁移直接 Noop），启动收敛才覆盖所有存量用户。
+        runCatching {
+            val readerPreferences = Injekt.get<ReaderPreferences>()
+            if (readerPreferences.readerTheme.get() == ReaderTheme.AUTOMATIC) {
+                readerPreferences.readerTheme.set(ReaderTheme.BLACK)
+            }
+            val einkBackupReaderTheme = Injekt.get<UiPreferences>().einkBackupReaderTheme
+            if (einkBackupReaderTheme.isSet() && einkBackupReaderTheme.get() == ReaderTheme.AUTOMATIC) {
+                einkBackupReaderTheme.set(ReaderTheme.BLACK)
+            }
+        }
 
         // Komiho (2026-10-04): E-Ink 模式下阅读器的「墨水屏默认值」（白底 / 无翻页动画）在这里收敛，
         // 并成对备份用户原值（关闭 E-Ink 时还原）。放在 onCreate 是为了让**升级前就已经开着

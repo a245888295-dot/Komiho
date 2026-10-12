@@ -486,11 +486,16 @@ class ReaderPreferences(
      *
      * 档位 4 复用历史值安全：Migration 18（RemoveOldReaderThemeMigration）已把旧值 4
      * 一次性迁移为 3，之后不会再有用户持有旧 4。
+     *
+     * [AUTOMATIC] 已从设置入口隐藏（底层智能取色逻辑保留），存量用户由 App 启动时的
+     * 幂等收敛一次性迁到 [BLACK]；正常流程不会再有人选到它。
      */
     object ReaderTheme {
         const val WHITE = 0
         const val BLACK = 1
         const val GRAY = 2
+
+        /** @suppress 已隐藏：不再出现在设置入口，存量值已收敛到 [BLACK]。 */
         const val AUTOMATIC = 3
         const val PARCHMENT = 4
         const val KRAFT = 5
@@ -522,20 +527,25 @@ class ReaderPreferences(
         }
 
         /**
-         * 纸色坡道矩阵：`out_c = K_c + (P_c - K_c) * L + s * (orig_c - L)`，
-         * 其中 `L = 0.299R + 0.587G + 0.114B`。
+         * 纸色坡道矩阵。页面此后还会乘一层均值 = [PaperStyle.whiteColor] 的纸纹
+         * （见 `PaperPageTexture`），所以矩阵按**复合效果**反解：
          *
-         * 白 → 纸色、黑 → 暖深色、中间调沿坡道过渡，彩色像素保留 [PaperStyle.chromaKeep]
-         * 比例彩度（避免彩漫被完全去色）。Android ColorMatrix 通道取值 0-255、偏移列同量纲。
+         * - 白场坡到 255：乘完正好落在纸色，与容器 letterbox 的纸纹衬底同色衔接；
+         * - 黑场坡到 255K/T：乘完正好落在 [PaperStyle.blackColor] 墨色；
+         * - 中间调乘完正好是 K → T 的理想纸色坡道（坡道与相乘都是线性，可精确反解）；
+         * - 彩色像素的彩度保留系数经相乘后仍为 [PaperStyle.chromaKeep]。
+         *
+         * 其中 T = 纸色（0-255），K = 墨色，`out = ramp × T/255`。
+         * Android ColorMatrix 通道取值 0-255、偏移列同量纲。
          */
         fun buildPaperMatrix(style: PaperStyle): ColorMatrix {
             val luminance = floatArrayOf(0.299f, 0.587f, 0.114f)
-            val white = intArrayOf(
+            val paper = intArrayOf(
                 Color.red(style.whiteColor),
                 Color.green(style.whiteColor),
                 Color.blue(style.whiteColor),
             )
-            val black = intArrayOf(
+            val ink = intArrayOf(
                 Color.red(style.blackColor),
                 Color.green(style.blackColor),
                 Color.blue(style.blackColor),
@@ -543,12 +553,13 @@ class ReaderPreferences(
             val chromaKeep = style.chromaKeep
             val m = FloatArray(20)
             for (c in 0..2) {
-                val ramp = (white[c] - black[c]) / 255f - chromaKeep
+                val ramp = (paper[c] - ink[c] - 255f * chromaKeep) / paper[c]
+                val chroma = 255f * chromaKeep / paper[c]
                 for (j in 0..2) {
-                    m[c * 5 + j] = ramp * luminance[j] + if (j == c) chromaKeep else 0f
+                    m[c * 5 + j] = ramp * luminance[j] + if (j == c) chroma else 0f
                 }
                 m[c * 5 + 3] = 0f
-                m[c * 5 + 4] = black[c].toFloat()
+                m[c * 5 + 4] = 255f * ink[c] / paper[c]
             }
             m[15] = 0f
             m[16] = 0f

@@ -87,7 +87,7 @@ class UiPreferences(
     //
     // 注意：这四个只是 E-Ink 的现场快照，不是业务偏好，别当垃圾数据清理。
 
-    /** E-Ink 前的阅读器背景（`ReaderPreferences.readerTheme`：0 白 / 1 黑 / 2 灰 / 3 自动）。 */
+    /** E-Ink 前的阅读器背景（`ReaderPreferences.readerTheme`：0 白 / 1 黑 / 2 灰；3 自动已隐藏，存量已收敛到 1）。 */
     val einkBackupReaderTheme: Preference<Int> = preferenceStore.getInt("pref_eink_backup_reader_theme", 0)
 
     /** E-Ink 前的页模式「翻页动画」（`ReaderPreferences.pageTransitionsPager`）。 */

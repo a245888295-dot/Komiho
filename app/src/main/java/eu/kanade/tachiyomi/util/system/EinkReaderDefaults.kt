@@ -97,6 +97,6 @@ object EinkReaderDefaults {
         }
     }
 
-    /** `ReaderPreferences.readerTheme` 的「白色」档位（0 白 / 1 黑 / 2 灰 / 3 自动）。 */
+    /** `ReaderPreferences.readerTheme` 的「白色」档位（0 白 / 1 黑 / 2 灰；3 自动已隐藏，存量已收敛到 1）。 */
     private const val READER_THEME_WHITE = 0
 }

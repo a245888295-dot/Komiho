@@ -103,7 +103,6 @@ object SettingsReaderScreen : SearchableSettings {
                         ReaderPreferences.ReaderTheme.BLACK to stringResource(MR.strings.black_background),
                         ReaderPreferences.ReaderTheme.GRAY to stringResource(MR.strings.gray_background),
                         ReaderPreferences.ReaderTheme.WHITE to stringResource(MR.strings.white_background),
-                        ReaderPreferences.ReaderTheme.AUTOMATIC to stringResource(MR.strings.automatic_background),
                         ReaderPreferences.ReaderTheme.PARCHMENT to stringResource(MR.strings.parchment_background),
                         ReaderPreferences.ReaderTheme.KRAFT to stringResource(MR.strings.kraft_background),
                     ),

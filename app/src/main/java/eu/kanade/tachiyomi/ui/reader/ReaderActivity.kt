@@ -103,6 +103,7 @@ import mihon.core.common.archive.ArchivePasswordException
 import eu.kanade.tachiyomi.util.pdf.PdfPasswordException
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
+import eu.kanade.tachiyomi.ui.reader.viewer.PaperPageTexture
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
@@ -1731,7 +1732,11 @@ class ReaderActivity : BaseActivity() {
          */
         init {
             readerPreferences.readerTheme.changes()
-                .onEach { theme -> applyReaderBackground(theme) }
+                .onEach { theme ->
+                    applyReaderBackground(theme)
+                    // Komiho: 页面纸纹随档位切换（纸档才叠，非纸档内部关闭）
+                    PaperPageTexture.update(this@ReaderActivity, theme)
+                }
                 .launchIn(lifecycleScope)
 
             preferences.displayProfile.changes()

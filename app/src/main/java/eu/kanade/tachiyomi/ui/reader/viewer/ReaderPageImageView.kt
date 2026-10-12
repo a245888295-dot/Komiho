@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.reader.viewer
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.drawable.Animatable
@@ -85,6 +86,17 @@ open class ReaderPageImageView @JvmOverloads constructor(
     var onImageLoadError: ((Throwable?) -> Unit)? = null
     var onScaleChanged: ((newScale: Float) -> Unit)? = null
     var onViewClicked: (() -> Unit)? = null
+
+    /**
+     * Komiho: 纸化背景档位下，在页面内容之上乘一层纸纹（羊皮纸/牛皮纸），
+     * 让白场漫画有纸的颗粒感。放在 dispatchDraw 里而不是 onDraw——本类是
+     * FrameLayout，画面由子 View（SSIV / PhotoView / GIF）绘制，纹理必须盖在
+     * 子视图之上。非纸档位零开销（[PaperPageTexture.drawOver] 直接返回）。
+     */
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        PaperPageTexture.drawOver(canvas, width, height)
+    }
 
     /**
      * MihonSY: the pixel height of the loaded image, or 0 if unknown. Exposed so the

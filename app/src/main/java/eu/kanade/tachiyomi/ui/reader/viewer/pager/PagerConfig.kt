@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.ui.reader.viewer.pager
 import android.graphics.Color
 import androidx.annotation.ColorInt
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
-import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences.ReaderTheme
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.ViewerNavigation
@@ -332,13 +331,9 @@ class PagerConfig(
     }
 
     fun themeToColor(theme: Int) {
-        // Komiho: 纸化档位（羊皮纸/牛皮纸）的双页合并间隙与保存图片合成底色取纸色，
-        // 与页面纸色滤镜白场、容器纸纹衬底一致。
         pageCanvasColor = when (theme) {
             1 -> Color.BLACK
             2 -> 0x202125
-            ReaderTheme.PARCHMENT -> ReaderTheme.PARCHMENT_STYLE.whiteColor
-            ReaderTheme.KRAFT -> ReaderTheme.KRAFT_STYLE.whiteColor
             else -> Color.WHITE
         }
     }
