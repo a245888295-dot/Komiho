@@ -1710,6 +1710,7 @@ class ReaderActivity : BaseActivity() {
             val paperDrawableRes = when (theme) {
                 ReaderTheme.PARCHMENT -> R.drawable.reader_bg_parchment
                 ReaderTheme.KRAFT -> R.drawable.reader_bg_kraft
+                ReaderTheme.OLD_PARCHMENT -> R.drawable.reader_bg_old_parchment
                 else -> null
             }
             if (paperDrawableRes != null) {

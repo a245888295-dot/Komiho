@@ -24,8 +24,9 @@ private val themes = listOf(
     MR.strings.black_background to ReaderPreferences.ReaderTheme.BLACK,
     MR.strings.gray_background to ReaderPreferences.ReaderTheme.GRAY,
     MR.strings.white_background to ReaderPreferences.ReaderTheme.WHITE,
-    // Komiho: 羊皮纸/牛皮纸为纸化档位——页面白场映射为纸色，与容器纸纹衬底同色衔接
+    // Komiho: 羊皮纸/旧羊皮纸/牛皮纸为纸化档位——页面白场映射为纸色，与容器纸纹衬底同色衔接
     MR.strings.parchment_background to ReaderPreferences.ReaderTheme.PARCHMENT,
+    MR.strings.old_parchment_background to ReaderPreferences.ReaderTheme.OLD_PARCHMENT,
     MR.strings.kraft_background to ReaderPreferences.ReaderTheme.KRAFT,
 )
 

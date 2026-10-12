@@ -50,6 +50,7 @@ object PaperPageTexture {
         val res = when (theme) {
             ReaderTheme.PARCHMENT -> R.drawable.reader_bg_parchment_tile
             ReaderTheme.KRAFT -> R.drawable.reader_bg_kraft_tile
+            ReaderTheme.OLD_PARCHMENT -> R.drawable.reader_bg_old_parchment_tile
             else -> null
         }
         if (res == null) {

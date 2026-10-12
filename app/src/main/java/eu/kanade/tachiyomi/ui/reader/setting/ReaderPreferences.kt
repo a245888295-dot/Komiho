@@ -480,7 +480,7 @@ class ReaderPreferences(
     /**
      * Komiho: 阅读器背景档位（`pref_reader_theme_key`）。
      *
-     * 羊皮纸/牛皮纸是「纸化」档位而非纯衬底：除容器贴纸纹 drawable 外，
+     * 羊皮纸/旧羊皮纸/牛皮纸是「纸化」档位而非纯衬底：除容器贴纸纹 drawable 外，
      * 页面还会过一层 [buildPaperMatrix] 纸色滤镜（见 `ReaderActivity.setLayerPaint`），
      * 白场漫画的纸面变为纸色，与容器衬底同色衔接。
      *
@@ -499,6 +499,7 @@ class ReaderPreferences(
         const val AUTOMATIC = 3
         const val PARCHMENT = 4
         const val KRAFT = 5
+        const val OLD_PARCHMENT = 6
 
         /**
          * 纸化档位参数：
@@ -508,14 +509,23 @@ class ReaderPreferences(
          */
         data class PaperStyle(val whiteColor: Int, val blackColor: Int, val chromaKeep: Float)
 
+        /** 羊皮纸 Light：纸档推荐默认，微黄轻纤维，不影响黑色线稿。 */
         val PARCHMENT_STYLE = PaperStyle(
-            whiteColor = Color.rgb(0xEF, 0xE3, 0xC8),
+            whiteColor = Color.rgb(0xEE, 0xE1, 0xC3),
             blackColor = Color.rgb(0x2B, 0x22, 0x18),
             chromaKeep = 0.35f,
         )
 
+        /** 旧羊皮纸：复古漫画向，纸色更黄、纹理更强，但无裂纹/烧焦边/大面积污渍。 */
+        val OLD_PARCHMENT_STYLE = PaperStyle(
+            whiteColor = Color.rgb(0xE1, 0xCD, 0xA0),
+            blackColor = Color.rgb(0x2B, 0x22, 0x18),
+            chromaKeep = 0.35f,
+        )
+
+        /** 牛皮纸：复古/手绘风，浅棕、纤维中档、颗粒低，避免包装纸感与深棕高对比。 */
         val KRAFT_STYLE = PaperStyle(
-            whiteColor = Color.rgb(0xC6, 0xAA, 0x7C),
+            whiteColor = Color.rgb(0xCD, 0xAF, 0x82),
             blackColor = Color.rgb(0x34, 0x26, 0x18),
             chromaKeep = 0.35f,
         )
@@ -523,6 +533,7 @@ class ReaderPreferences(
         fun paperStyleOf(theme: Int): PaperStyle? = when (theme) {
             PARCHMENT -> PARCHMENT_STYLE
             KRAFT -> KRAFT_STYLE
+            OLD_PARCHMENT -> OLD_PARCHMENT_STYLE
             else -> null
         }
 

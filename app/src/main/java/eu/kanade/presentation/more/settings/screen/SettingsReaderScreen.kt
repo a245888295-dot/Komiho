@@ -104,6 +104,7 @@ object SettingsReaderScreen : SearchableSettings {
                         ReaderPreferences.ReaderTheme.GRAY to stringResource(MR.strings.gray_background),
                         ReaderPreferences.ReaderTheme.WHITE to stringResource(MR.strings.white_background),
                         ReaderPreferences.ReaderTheme.PARCHMENT to stringResource(MR.strings.parchment_background),
+                        ReaderPreferences.ReaderTheme.OLD_PARCHMENT to stringResource(MR.strings.old_parchment_background),
                         ReaderPreferences.ReaderTheme.KRAFT to stringResource(MR.strings.kraft_background),
                     ),
                     title = stringResource(MR.strings.pref_reader_theme),
