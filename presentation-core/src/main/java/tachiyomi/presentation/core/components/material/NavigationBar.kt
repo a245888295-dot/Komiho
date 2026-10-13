@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 /**
  * M3 Navbar with no horizontal spacer
  *
+ * @param height 内容区高度（系统导航栏 inset 之外的部分）。栏总高 = 底部 inset + [height]，
+ * 因此手势导航与三大明珠（三按钮）下图标区都恒定 [height]，不被系统导航栏挤压。
  * @see [androidx.compose.material3.NavigationBar]
  */
 @Composable
@@ -28,6 +30,7 @@ fun NavigationBar(
     contentColor: Color = MaterialTheme.colorScheme.contentColorFor(containerColor),
     tonalElevation: Dp = NavigationBarDefaults.Elevation,
     windowInsets: WindowInsets = NavigationBarDefaults.windowInsets,
+    height: Dp = 80.dp,
     content: @Composable RowScope.() -> Unit,
 ) {
     androidx.compose.material3.Surface(
@@ -39,8 +42,10 @@ fun NavigationBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                // 修饰符顺序不可调换：windowInsetsPadding 在外、height 在内，
+                // 总高 = 底部 inset + height；反了内容区会被 inset 挤压。
                 .windowInsetsPadding(windowInsets)
-                .height(80.dp)
+                .height(height)
                 .selectableGroup(),
             content = content,
         )

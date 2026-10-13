@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.grid.LazyGridLayoutInfo
@@ -524,8 +520,9 @@ fun BookShelf(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                        .windowInsetsPadding(WindowInsets.navigationBars),
+                        // 不再叠 navigationBars padding：本栏在 Scaffold 内容区内，底部已由
+                        // 底栏（总高含系统导航栏 inset）顶开；再叠会留出等于导航栏高度的空白带。
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     SelectionActionItem(

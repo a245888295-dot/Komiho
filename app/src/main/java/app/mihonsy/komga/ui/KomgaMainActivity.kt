@@ -64,7 +64,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -135,7 +134,7 @@ import tachiyomi.presentation.core.components.SortItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
+import tachiyomi.presentation.core.components.material.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 // SY --> Komiho: 平板导航 rail（图标 + 文字，左/右可选，见 navBarPosition）。
 import androidx.compose.material3.NavigationRailItem
@@ -1319,9 +1318,11 @@ private fun KomgaMainScreen(
         bottomBar = {
             // Icon-only tabs: a compact bar — the default 80dp NavigationBar
             // leaves large empty areas above/below the icons.
+            // SY: height = 图标区高度（不含系统导航栏 inset）；栏总高 = inset + 60dp，
+            // 手势导航与三大明珠下图标区都恒定 60dp，不被系统导航栏挤压。
             // SY: 平板且选了左/右 rail 时不再渲染底部栏（导航交给 KomgaNavRail）。
             if (!showAddSource && !useNavRail) {
-                NavigationBar(modifier = Modifier.height(60.dp)) {
+                NavigationBar(height = 60.dp) {
                     // SY --> Komiho P0: 只渲染当前来源下可见的 tab。
                     visibleTabs.forEach { tab ->
                         NavigationBarItem(
@@ -2845,8 +2846,9 @@ private fun LibraryTab(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                        .windowInsetsPadding(WindowInsets.navigationBars),
+                        // 不再叠 navigationBars padding：本栏在 Scaffold 内容区内，底部已由
+                        // 底栏（总高含系统导航栏 inset）顶开；再叠会留出等于导航栏高度的空白带。
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     SelectionActionItem(
