@@ -7,7 +7,7 @@ import android.graphics.BitmapFactory
 import app.mihonsy.komga.data.remote.CachingArchiveHandle
 import app.mihonsy.komga.data.remote.RemotePageCache
 // SY <--
-import eu.kanade.tachiyomi.util.ImageCoverPicker
+import eu.kanade.tachiyomi.util.pickCoverFirstImage
 import eu.kanade.tachiyomi.util.lang.compareToCaseInsensitiveNaturalOrder
 import eu.kanade.tachiyomi.util.mobi.MobiExtractor
 import eu.kanade.tachiyomi.util.pdf.PdfRenderFallback
