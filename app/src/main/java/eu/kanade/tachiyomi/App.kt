@@ -31,6 +31,7 @@ import coil3.request.crossfade
 import coil3.util.DebugLogger
 // SY --> Komiho: 进程启动时把「应用语言」对齐到平台 per-app locale（阅读器走 AppCompat 的那条路）
 import app.mihonsy.komga.applyAppLanguageToPlatform
+import app.mihonsy.komga.data.webdav.WebDavCoverCache
 // SY <--
 import eu.kanade.domain.DomainModule
 import eu.kanade.domain.SYDomainModule
@@ -151,6 +152,11 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                 einkBackupReaderTheme.set(ReaderTheme.BLACK)
             }
         }
+
+        // Komiho (2026-10-13, issue #7): WebDAV「显示封面」旧档位（0=关/1-6=并发）拆成
+        // 「显示封面」开关 + 纯并发档（1-8）后，把存量用户的旧档位一次性翻译过来。
+        // 幂等（内部有标记），放在 E-Ink 收敛旁边同理：升级前就开着封面的用户首启即自愈。
+        WebDavCoverCache.migrateCoverModeIfNeeded()
 
         // Komiho (2026-10-04): E-Ink 模式下阅读器的「墨水屏默认值」（白底 / 无翻页动画）在这里收敛，
         // 并成对备份用户原值（关闭 E-Ink 时还原）。放在 onCreate 是为了让**升级前就已经开着

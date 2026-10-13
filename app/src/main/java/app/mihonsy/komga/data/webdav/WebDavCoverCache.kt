@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import app.mihonsy.komga.data.remote.CachingArchiveHandle
 import app.mihonsy.komga.data.remote.RemotePageCache
 // SY <--
+import eu.kanade.tachiyomi.util.ImageCoverPicker
 import eu.kanade.tachiyomi.util.lang.compareToCaseInsensitiveNaturalOrder
 import eu.kanade.tachiyomi.util.mobi.MobiExtractor
 import eu.kanade.tachiyomi.util.pdf.PdfRenderFallback
@@ -38,12 +39,14 @@ import kotlin.math.min
 // 思路（用户定）：ChapterLoader 打开 WebDAV 章节时若封面缓存缺失，则用独立连接按
 // Range 拉首图（尾部 64KB + 中央目录 + 首图条目，通常 < 1MB 流量），采样压缩后落
 // filesDir/komiho_webdav_covers/；历史/书签行读磁盘显示。
-// Komiho (2026-10-02): 新增「WebDAV显示封面」并发档位（设置→高级，0-6 默认 0）——
-// 档位 = **浏览器侧**封面显示/预取的开关与速度：0 = 浏览器不显示也不预取封面（不发请求），
-// ≥1 = 浏览器按档位并发拉取显示（全局并发槽位 + 随档位缩放的最小间隔 + 失败退避 10 分钟，
-// 见 [coverForDisplay]）。**打开章节「顺便生成」不受档位限制**（见 [generateAsync] 的 fromBrowser）：
-// 无论档位多少，打开 WebDAV 章节都会照常生成封面（限流按 1 槽位算），历史/书签/聚合卡
-// 因此始终有封面（见 [coverCachedOnly]）。
+// Komiho (2026-10-02): 新增「WebDAV显示封面」并发档位（设置→高级）——**浏览器侧**封面
+// 拉取速度（全局并发槽位 + 随档位缩放的最小间隔 + 失败退避 10 分钟，见 [coverForDisplay]）。
+// Komiho (2026-10-13, issue #7): 档位重定义为纯「封面拉取并发」（1-8，默认 3，不再有
+// 「0 = 关」）；浏览器封面**可见性**拆到选项菜单的「显示封面」开关
+// （[tachiyomi.domain.storage.service.StoragePreferences.webdavBrowseShowCover]，与本地/SMB
+// 同语义，一个开关同时管归档与文件夹封面）。旧双职责档位由 [migrateCoverModeIfNeeded]
+// 一次性收敛。**打开章节「顺便生成」不受开关限制**：无论开关状态，打开 WebDAV 章节都会
+// 照常生成封面，历史/书签/聚合卡因此始终有封面（见 [coverCachedOnly]）。
 // 生成失败（不支持压缩/加密无密码/网络）只影响本次，
 // 下次自动重试。缓存键 = 完整文件 URL 的 sha256，无自动 LRU（每张
 // 40-70KB，可存上千张；如需回收可清 komiho_webdav_covers 目录，不影响其他缓存）。
@@ -52,23 +55,28 @@ object WebDavCoverCache {
     /** 封面缓存目录名（filesDir 下）。public 供设置页统计/清除，避免目录名漂移。 */
     const val DIR = "komiho_webdav_covers"
 
-    /** 设置 → 高级 →「WebDAV显示封面」：0 = 不再拉取封面（不发请求，已缓存仍显示），1-6 = 拉封面并发上限。 */
+    /** 设置 → 高级 →「WebDAV封面拉取并发」：1-8 = 拉封面并发上限（默认 3，防风控与速度折中）。
+     *  本档位**只影响速度**：可见性由浏览器选项菜单的「显示封面」开关决定
+     *  （[tachiyomi.domain.storage.service.StoragePreferences.webdavBrowseShowCover]）。
+     *  历史「0 = 关」双职责语义已由 [migrateCoverModeIfNeeded] 一次性收敛移除。 */
     const val KEY_COVER_CONCURRENCY = "komiho_webdav_cover_concurrency"
-    private const val MAX_CONCURRENCY = 6
+    private const val MAX_CONCURRENCY = 8
+    private const val DEFAULT_CONCURRENCY = 3
 
     /** 全局限流：相邻两次封面网络任务的最小间隔。随「并发档位」缩放——档位越高越快，
-     *  既保留低档位的防风控口径，又让高档位真正提速（档位 1 ≈ 400ms，6 ≈ 100ms 下限）。 */
+     *  既保留低档位的防风控口径，又让高档位真正提速（档位 1 ≈ 400ms，8 = 50ms 下限）。 */
     private const val BASE_INTERVAL_MS = 400L
-    private const val MIN_INTERVAL_FLOOR_MS = 100L
+    private const val MIN_INTERVAL_FLOOR_MS = 50L
     private fun intervalMs(concurrency: Int): Long =
         (BASE_INTERVAL_MS / concurrency.coerceAtLeast(1)).coerceAtLeast(MIN_INTERVAL_FLOOR_MS)
 
     /** 失败退避：同章节失败后多久内不再尝试（避免受限模式下反复打请求）。 */
     private const val FAIL_RETRY_MS = 10 * 60 * 1000L
 
-    /** 当前封面并发档位（0-6，默认 0 = 防风控最保守）。 */
+    /** 当前封面并发档位（1-8，默认 3）。 */
     fun coverConcurrency(): Int =
-        Injekt.get<PreferenceStore>().getInt(KEY_COVER_CONCURRENCY, 0).get().coerceIn(0, MAX_CONCURRENCY)
+        Injekt.get<PreferenceStore>().getInt(KEY_COVER_CONCURRENCY, DEFAULT_CONCURRENCY).get()
+            .coerceIn(1, MAX_CONCURRENCY)
     private const val MAX_PX = 450
     private const val JPEG_QUALITY = 80
 
@@ -123,38 +131,35 @@ object WebDavCoverCache {
     }
 
     /** 展示用封面（**WebDAV 浏览器列表**）：
-     *  档位 0 → 永远 null（浏览器不显示、不发请求）；
-     *  档位 ≥1 → 命中缓存直接返回；缓存缺失则**由列表页触发限流后台生成**（本轮先占位，
+     *  [enabled] = 「显示封面」开关当前值（false → 恒 null，不显示也不发请求）；
+     *  true → 命中缓存直接返回；缓存缺失则**由列表页触发限流后台生成**（本轮先占位，
      *  生成完成后 [coverTick] 自增驱动重组上屏）。列表补拉与打开章节共用同一条限流队列，
      *  突发几十行也只是按并发档位排队 + 400ms 间隔慢慢补，不会形成请求风暴。
-     *  注：历史/书签/聚合卡走 [coverCachedOnly]，**不受档位影响**。 */
-    fun coverForDisplay(context: Context, chapterUrl: String): File? {
-        if (!isWebDavChapter(chapterUrl)) return null
+     *  注：历史/书签/聚合卡走 [coverCachedOnly]，**不受开关影响**。 */
+    fun coverForDisplay(context: Context, chapterUrl: String, enabled: Boolean): File? {
+        if (!isWebDavChapter(chapterUrl) || !enabled) return null
         val file = coverFile(context, chapterUrl)?.takeIf { it.isFile && it.length() > 0 }
-        if (file != null) return if (coverConcurrency() <= 0) null else file
-        generateAsync(context, chapterUrl, startDelayMs = 0L, epoch = activeEpoch, fromBrowser = true)
+        if (file != null) return file
+        generateAsync(context, chapterUrl, startDelayMs = 0L, epoch = activeEpoch)
         return null
     }
 
     /**
-     * 异步生成封面（对外入口统一走这里）：
+     * 异步生成封面（对外入口统一走这里）。是否**浏览器侧**发起由调用方决定——
+     * 浏览器两条路径（[coverForDisplay] 与浏览页预取）只在「显示封面」开关打开时才会进来；
+     * 阅读器「打开章节顺便生成」等路径不受开关限制，历史/书签/聚合卡因此始终有封面可显示。
+     *
      * @param startDelayMs 生成前延迟，仅阅读器路径需要（3s，避开与阅读线程同时整本缓存
      * 下载的竞态）；列表补拉传 0。延迟在**并发槽位外**睡，不占槽位拖慢排队。
-     * @param fromBrowser true = 浏览器列表触发（受「WebDAV显示封面」档位限制，0 档直接返回）；
-     *  false（默认）= 阅读器「打开章节顺便生成」等非浏览器路径，**不受档位限制**——0 档只关
-     *  浏览器显示/预取，打开章节仍照常生成，历史/书签/聚合卡才有封面可显示。
      */
     fun generateAsync(
         context: Context,
         chapterUrl: String,
         startDelayMs: Long = 3000L,
         epoch: Long? = null,
-        fromBrowser: Boolean = false,
     ) {
         if (!isWebDavChapter(chapterUrl)) return
         val concurrency = coverConcurrency()
-        if (fromBrowser && concurrency <= 0) return
-        // 0 档且非浏览器路径时仍要跑：限流按 1 槽位算，避免 0 槽位死等。
         val effectiveConcurrency = concurrency.coerceAtLeast(1)
         val target = coverFile(context, chapterUrl) ?: return
         if (target.isFile && target.length() > 0) return
@@ -192,7 +197,7 @@ object WebDavCoverCache {
                 }
                 if (isDirectory) {
                     // 散图每页独立 GET，不存在整本缓存竞态，无需延迟。
-                    runCatching { generateFromDirectory(chapterUrl, target) }
+                    runCatching { generateFromDirectory(app, chapterUrl, target) }
                         .onFailure {
                             recordFailure(chapterUrl)
                             logcat(LogPriority.INFO) { "[WebDavCover] 目录封面生成失败：${it.message}" }
@@ -379,22 +384,35 @@ object WebDavCoverCache {
      * SY: 散图目录章节的封面 —— 列目录（PROPFIND）→ 自然序取第一张图（与阅读器首页同口径）
      * → GET 该图 → 采样压缩落盘。只发 1 次列表 + 1 次图片请求。
      * 目录章节没有归档句柄，无法复用 [generate] 的拆包逻辑，故单独一条路径。
+     *
+     * Komiho: 目录内**无散图**（只有归档/书）时，回落「目录内第一个归档的首图」——
+     * 与 LocalCoverFetcher 目录分支、SMB 目录封面同口径；直接调 [generate] 拆包，
+     * zip/PDF/MOBI 全覆盖。否则「WebDAV 文件夹只有书时永远没有封面」（issue #7 病灶）。
      */
-    private fun generateFromDirectory(chapterUrl: String, target: File) {
+    private fun generateFromDirectory(context: Context, chapterUrl: String, target: File) {
         val connId = chapterUrl.removePrefix(WebDavConnectionStore.CONN_URL_PREFIX).substringBefore('/')
         val conn = WebDavConnectionStore.all().firstOrNull { it.id == connId }
             ?: throw IllegalStateException("WebDAV 连接不存在（可能已删除）: $chapterUrl")
         val dirUrl = WebDavConnectionStore.extractFullUrl(chapterUrl)
             .let { if (it.endsWith('/')) it else "$it/" }
-        val firstUrl = runBlocking {
-            WebDavPropfind.list(conn, dirUrl)
-                .filter { it.isImage }
-                .sortedWith { a, b -> a.name.compareToCaseInsensitiveNaturalOrder(b.name) }
-                .firstOrNull()?.url
-        } ?: return
-        val raw = fetchBytes(conn, firstUrl)
-        val bmp = decodeSampled({ ByteArrayInputStream(raw) }, MAX_PX) ?: return
-        writeCover(bmp, target)
+        val entries = runBlocking { WebDavPropfind.list(conn, dirUrl) }
+        // 1) 散图优先：cover 优先 / 自然序第一张（pickCoverFirstImage，与阅读器首页同口径）。
+        val images = entries.filter { it.isImage }
+        val picked = pickCoverFirstImage(images.map { it.name })
+            ?.let { name -> images.firstOrNull { it.name == name } }
+        if (picked != null) {
+            val raw = fetchBytes(conn, picked.url)
+            val bmp = decodeSampled({ ByteArrayInputStream(raw) }, MAX_PX) ?: return
+            writeCover(bmp, target)
+            return
+        }
+        // 2) 回落：目录内第一个归档的首图。构造该归档的 chapterUrl（无尾斜杠 = 非目录），
+        //    直接复用 [generate] 的拆包取首图路径（含页缓存，首图已缓存则零网络）。
+        val firstArchive = entries.filter { it.isArchive }
+            .sortedWith { a, b -> a.name.compareToCaseInsensitiveNaturalOrder(b.name) }
+            .firstOrNull() ?: return
+        val archiveChapterUrl = WebDavConnectionStore.toChapterUrl(conn.id, firstArchive.url)
+        generate(context, archiveChapterUrl, target)
     }
 
     /** 单图 GET（Basic 认证；复用阅读器同一条 OkHttpClient，防风控口径与页面读取一致）。 */
@@ -457,6 +475,35 @@ object WebDavCoverCache {
     private fun sha256(s: String): String {
         val md = MessageDigest.getInstance("SHA-256")
         return md.digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Komiho (2026-10-13, issue #7): 一次性收敛——旧「WebDAV显示封面」档位（0=关 / 1-6=并发）
+     * 拆成「显示封面」开关 + 纯并发档（1-8）后，把存量用户的旧档位翻译过来：
+     * - 旧 0 → 开关关、并发设默认 [DEFAULT_CONCURRENCY]；
+     * - 旧 1-6 → 开关开、并发取旧值。
+     *
+     * 幂等（[tachiyomi.domain.storage.service.StoragePreferences.webdavCoverModeSplit] 标记），
+     * 由 App.onCreate 调用——本 fork 的 mihon 迁移框架与 versionCode 不同轨（CI 包与正式包
+     * 共用 versionCode，old == new 时直接 Noop），启动收敛才覆盖所有存量用户。
+     * 全程 runCatching：失败只是维持现状，绝不让启动崩掉。
+     */
+    fun migrateCoverModeIfNeeded() = runCatching {
+        val prefs = Injekt.get<StoragePreferences>()
+        if (prefs.webdavCoverModeSplit.get()) return@runCatching
+        val store = Injekt.get<PreferenceStore>()
+        // 读取必须带**旧默认 0**：未设置过的用户存储里没有这个键，用新默认 3 读会把
+        // 「从未开启」误判成「旧档位 3」而错误打开开关。写入不受读默认影响。
+        val concurrencyPref = store.getInt(KEY_COVER_CONCURRENCY, 0)
+        val old = concurrencyPref.get()
+        if (old <= 0) {
+            prefs.webdavBrowseShowCover.set(false)
+            concurrencyPref.set(DEFAULT_CONCURRENCY)
+        } else {
+            prefs.webdavBrowseShowCover.set(true)
+            concurrencyPref.set(old.coerceIn(1, MAX_CONCURRENCY))
+        }
+        prefs.webdavCoverModeSplit.set(true)
     }
 }
 // SY <--

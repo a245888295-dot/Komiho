@@ -4098,22 +4098,21 @@ private fun SettingsTab(
                         prefs.readerProgressBubbleEnabled = it
                     },
                 )
-                // SY --> Komiho: WebDAV 显示封面并发档位（0 关闭，1-6 拉封面并发上限，防网盘风控）。
+                // SY --> Komiho: WebDAV 封面拉取并发档位（1-8，默认 3，防网盘风控）。
                 // 无图标；当前值显示在标题右侧（类开关位置），点击弹窗单选。
+                // 注意：本档位**只影响拉取速度**——封面可见性在浏览器选项菜单的「显示封面」开关
+                // （与本地/SMB 同语义，见 StoragePreferences.webdavBrowseShowCover）。
                 var webdavCoverConcurrency by remember {
                     mutableIntStateOf(WebDavCoverCache.coverConcurrency())
                 }
                 val webdavCoverPrefs = remember { Injekt.get<PreferenceStore>() }
                 var showCoverConcurrencyDialog by remember { mutableStateOf(false) }
                 TextPreferenceWidget(
-                    title = composeStringResource(R.string.webdav_cover_display),
+                    title = composeStringResource(R.string.webdav_cover_concurrency),
+                    subtitle = composeStringResource(R.string.webdav_cover_concurrency_summary),
                     widget = {
                         Text(
-                            text = if (webdavCoverConcurrency == 0) {
-                                composeStringResource(R.string.webdav_cover_off)
-                            } else {
-                                webdavCoverConcurrency.toString()
-                            },
+                            text = webdavCoverConcurrency.toString(),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -4123,23 +4122,23 @@ private fun SettingsTab(
                 if (showCoverConcurrencyDialog) {
                     AlertDialog(
                         onDismissRequest = { showCoverConcurrencyDialog = false },
-                        title = { Text(composeStringResource(R.string.webdav_cover_concurrency_title)) },
+                        title = { Text(composeStringResource(R.string.webdav_cover_concurrency)) },
                         text = {
                             Column {
                                 Text(
-                                    text = composeStringResource(R.string.webdav_cover_display_summary),
+                                    text = composeStringResource(R.string.webdav_cover_concurrency_summary),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(bottom = 8.dp),
                                 )
-                                listOf(0, 1, 2, 3, 4, 5, 6).forEach { option ->
+                                (1..8).forEach { option ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
                                                 webdavCoverConcurrency = option
                                                 webdavCoverPrefs
-                                                    .getInt(WebDavCoverCache.KEY_COVER_CONCURRENCY, 0)
+                                                    .getInt(WebDavCoverCache.KEY_COVER_CONCURRENCY, 3)
                                                     .set(option)
                                                 showCoverConcurrencyDialog = false
                                             }
@@ -4151,11 +4150,7 @@ private fun SettingsTab(
                                             onClick = null,
                                         )
                                         Text(
-                                            text = if (option == 0) {
-                                                composeStringResource(R.string.webdav_cover_off)
-                                            } else {
-                                                option.toString()
-                                            },
+                                            text = option.toString(),
                                             style = MaterialTheme.typography.bodyLarge,
                                             modifier = Modifier.padding(start = 16.dp),
                                         )
@@ -6775,9 +6770,11 @@ private fun WebDavBrowsePane(
     var displayMode by remember { mutableStateOf(LibraryDisplayMode.fromPref(prefs.webdavBrowseDisplayMode.get())) }
     var sort by remember { mutableStateOf(LocalFileSort.fromPref(prefs.webdavBrowseSort.get())) }
     var columnCount by remember { mutableStateOf(prefs.webdavBrowseColumns.get()) }
-    // SY --> Komiho (2026-10-02): 浏览器不再单独设「显示封面」开关，直接跟随「WebDAV显示封面」档位——
-    // 档位≥1 才显示（并在进入目录时入队生成），档位 0 恒不显示也不发请求。开关已在选项菜单隐藏。
-    val showCover = WebDavCoverCache.coverConcurrency() > 0
+    // SY --> Komiho (2026-10-13, issue #7): 「显示封面」开关回到选项菜单（与本地/SMB 同语义）——
+    // 一个布尔同时管归档封面与文件夹封面（目录内第一个归档的首图，见
+    // WebDavCoverCache.generateFromDirectory）；关则全部回落默认图标，浏览器侧不发请求。
+    // 「封面拉取并发数」（设置-高级）只影响速度，不再承担可见性职责。
+    var showCover by remember { mutableStateOf(prefs.webdavBrowseShowCover.get()) }
     // SY <--
     var showOptions by remember { mutableStateOf(false) }
     // SY --> Komiho: 文件浏览器顶部搜索（范围 = 当前目录，便于在数百子目录中快速定位）。
@@ -6930,9 +6927,9 @@ private fun WebDavBrowsePane(
     val showRecursive = searchActive && searchRecursive && searchQuery.isNotBlank()
     val displayList = if (showRecursive) searchResults else visible
     // SY --> Komiho: 进入目录即对当前目录的 目录/归档 条目启动封面生成——不再只依赖逐行可见时才触发
-    // （用户反馈「进目录没启动封面生成」）。是否真正发请求/并发上限/400ms 间隔由「WebDAV显示封面」
-    // 档位与限流队列决定（档位 0 时浏览器侧不发请求：fromBrowser=true 直接返回；打开章节的生成
-    // 不受档位影响）；递归搜索结果不预生成。
+    // （用户反馈「进目录没启动封面生成」）。是否发请求由「显示封面」开关决定（关则整个 effect 直接
+    // 返回，浏览器侧零请求）；并发上限/最小间隔由「封面拉取并发」档位与限流队列决定（打开章节的
+    // 生成不受开关影响）；递归搜索结果不预生成。
     val coverContext = LocalContext.current
     // 进入目录先自增「目录代号」——remember 在本次组合中先于 LazyColumn 子项执行，保证行组合
     // （coverForDisplay）拿到的就是新代号；于是上一目录尚未执行的任务作废（最新目录优先）。
@@ -6950,7 +6947,7 @@ private fun WebDavBrowsePane(
             if (e.isDir || e.isArchive) {
                 val base = if (e.isDir) e.url.trimEnd('/') else e.url
                 val chapterUrl = WebDavConnectionStore.toChapterUrl(conn.id, base) + if (e.isDir) "/" else ""
-                WebDavCoverCache.generateAsync(coverContext, chapterUrl, startDelayMs = 0L, epoch = dirEpoch, fromBrowser = true)
+                WebDavCoverCache.generateAsync(coverContext, chapterUrl, startDelayMs = 0L, epoch = dirEpoch)
                 enqueued++
             }
         }
@@ -7153,8 +7150,8 @@ private fun WebDavBrowsePane(
         displayMode = displayMode,
         onDisplayModeChange = { displayMode = it; prefs.webdavBrowseDisplayMode.set(it.prefValue) },
         showCover = showCover,
-        onShowCoverChange = {},
-        showCoverEnabled = false,
+        onShowCoverChange = { showCover = it; prefs.webdavBrowseShowCover.set(it) },
+        showCoverEnabled = true,
         columnCount = columnCount,
         onColumnChange = { columnCount = it; prefs.webdavBrowseColumns.set(it) },
         sort = sort,
@@ -7221,8 +7218,9 @@ private fun WebDavGridItem(conn: WebDavConnection, entry: WebDavEntry, showCover
 
 /** WebDAV 条目封面渲染：仅归档/目录取封面（单图回落图标，避免逐图 GET）。
  *  封面复用 WebDavCoverCache 缓存（键 = 章节 URL，与阅读器打开同键，历史/浏览互通）；
- *  「WebDAV显示封面」档位 0 时 coverForDisplay 恒 null，仅显示图标不发请求。
- *  coverTick 为重组 key：档位>0 时列表补拉落盘完成即上屏。 */
+ *  「显示封面」开关关时 coverForDisplay 恒 null，仅显示图标不发请求；目录条目走
+ *  「散图优先 → 目录内第一个归档首图」回落（issue #7）。
+ *  coverTick 为重组 key：列表补拉落盘完成即上屏。 */
 @Composable
 private fun WebDavCoverThumb(
     conn: WebDavConnection,
@@ -7252,7 +7250,8 @@ private fun WebDavCoverThumb(
     }
     val cover = remember(chapterUrl, coverTick) {
         // 展示用封面：命中缓存直接显示；缺失时按「当前目录代号」入队生成（过期任务作废）。
-        WebDavCoverCache.coverForDisplay(context, chapterUrl)
+        // 归档与目录条目都由同一个「显示封面」开关控制（本地/SMB 同语义）。
+        WebDavCoverCache.coverForDisplay(context, chapterUrl, showCover)
     }
     if (cover == null) {
         icon()

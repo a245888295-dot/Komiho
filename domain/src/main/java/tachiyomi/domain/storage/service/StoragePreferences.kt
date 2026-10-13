@@ -57,6 +57,26 @@ class StoragePreferences(
         false,
     )
 
+    /**
+     * Komiho: WebDAV 文件浏览器是否显示封面（默认关，与本地/SMB 同语义）。
+     * 一个开关同时管**归档封面**与**文件夹封面**（目录内第一个归档的首图，见
+     * `WebDavCoverCache.generateFromDirectory`）；关则全部回落默认图标，浏览器侧不发请求。
+     * 「封面拉取并发数」是独立性能档（设置-高级），不再承担可见性职责。
+     */
+    val webdavBrowseShowCover: Preference<Boolean> = preferenceStore.getBoolean(
+        Preference.appStateKey("webdav_browse_show_cover"),
+        false,
+    )
+
+    /**
+     * Komiho: 「WebDAV显示封面」旧档位（0=关/1-6=并发）拆成「开关 + 纯并发档」的一次性收敛标记。
+     * 见 `WebDavCoverCache.migrateCoverModeIfNeeded`（App.onCreate 调用）。收敛完成后恒为 true。
+     */
+    val webdavCoverModeSplit: Preference<Boolean> = preferenceStore.getBoolean(
+        Preference.appStateKey("webdav_cover_mode_split"),
+        false,
+    )
+
     /** Komiho: 本地文件浏览器网格模式每行列数（0 = 自动 Adaptive 列密度）。 */
     val localBrowseColumns: Preference<Int> = preferenceStore.getInt(
         Preference.appStateKey("local_browse_columns"),
