@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   阅读器羊皮纸背景：无缝平铺纹理。webp 在 drawable-nodpi，避免系统按密度缩放
-  导致平铺网格尺寸随设备漂移。基色 #F4D7A9（纸纹实测均值）与 ReaderTheme.PARCHMENT_STYLE
+  导致平铺网格尺寸随设备漂移。基色 #F6E1BF（纸纹实测均值）与 ReaderTheme.PARCHMENT_STYLE
   的页面滤镜白场一致，页面与 letterbox 才能同色衔接。
 -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"

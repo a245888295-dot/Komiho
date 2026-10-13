@@ -510,7 +510,7 @@ class ReaderPreferences(
 
         /** 羊皮纸：纸档推荐默认。纸色 = 纸纹 webp 实测均值，页面与 letterbox 才能同色衔接。 */
         val PARCHMENT_STYLE = PaperStyle(
-            whiteColor = Color.rgb(0xF4, 0xD7, 0xA9),
+            whiteColor = Color.rgb(0xF6, 0xE1, 0xBF),
             blackColor = Color.rgb(0x2B, 0x22, 0x18),
             chromaKeep = 0.35f,
         )
