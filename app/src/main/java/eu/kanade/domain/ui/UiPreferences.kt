@@ -103,6 +103,19 @@ class UiPreferences(
         preferenceStore.getBoolean("pref_eink_backup_page_transitions_webtoon_v2", false)
 
     /**
+     * E-Ink 前的**皮肤**（`app.mihonsy.komga.data.KomgaPreferences.appTheme` 的 `AppTheme`
+     * 枚举名字符串；空串 = 没有备份）。
+     *
+     * 单独说明两点：
+     * 1. 存的是 Komga 侧那份皮肤 —— `KomihoTheme` 全局配色读的就是它，E-Ink 开关也只写它
+     *    （Mihon 侧的 `appTheme` 是另一份存储、驱动 Activity 的 XML 主题，开关从未写过，不代管）；
+     * 2. **皮肤已经是 `EINK` 时绝不能写入这个快照** —— 本修复前就开着 E-Ink 的用户当前皮肤就是
+     *    EINK，若无条件快照，关闭后会「还原」成 EINK（bug 换个形式复现），详见
+     *    `EinkReaderDefaults.syncKomgaAppTheme` 的迁移护栏。
+     */
+    val einkBackupAppTheme: Preference<String> = preferenceStore.getString("pref_eink_backup_app_theme", "")
+
+    /**
      * E-Ink 模式是否**应当生效**。动画链路与 Coil 请求会高频读它，所以放一个派生属性
      * 免得每处都写两个条件的与。
      */

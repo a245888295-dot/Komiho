@@ -4659,6 +4659,13 @@ private fun KomgaAppearanceSettings(modifier: Modifier, context: android.content
                     // （用户原值已备份，关闭 E-Ink 时还原）。必须在 recreate 之前落库，
                     // 否则重组后设置项读到的还是旧值，会出现「显示开着、实际不生效」的错位。
                     EinkReaderDefaults.sync()
+                    // Komiho (2026-10-14): 关闭时上面那句 sync() 会把皮肤还原成开启前的那套
+                    // （没有快照的存量用户回落默认皮肤）。这里同步勾选状态 —— 皮肤列表读的是
+                    // 局部 appThemeSel，recreate 只让新皮肤生效、不会自己修正这个状态。
+                    if (!enabled) {
+                        appThemeSel = runCatching { AppTheme.valueOf(prefs.appTheme) }
+                            .getOrDefault(AppTheme.DEFAULT)
+                    }
                     // AMOLED 项在开启时隐藏（见上），关掉模式后用户的原值还在。
                     activity?.recreate()
                 },

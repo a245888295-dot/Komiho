@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.util.system
 
+import android.app.Application
+import app.mihonsy.komga.data.KomgaPreferences
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import tachiyomi.core.common.preference.Preference
 import uy.kohesive.injekt.Injekt
@@ -21,6 +24,7 @@ import uy.kohesive.injekt.api.get
  * | 页模式翻页动画 `pageTransitionsPager` | [UiPreferences.isEinkAnimationOff] | 关 |
  * | 条漫翻页动画 v1 `pageTransitionsWebtoon` | 同上 | 关 |
  * | 条漫翻页动画 v2 `pageTransitionsWebtoonV2` | 同上 | 关 |
+ * | 皮肤 `KomgaPreferences.appTheme` | [UiPreferences.isEinkModeActive] | `AppTheme.EINK` |
  *
  * 备份存在（`isSet()`）即表示该项**当前正被 E-Ink 改写**：此时只保证目标值仍然成立
  * （用户在 E-Ink 期间又打开了翻页动画，下次 sync 会再关掉），**绝不更新备份**，
@@ -69,6 +73,42 @@ object EinkReaderDefaults {
             active = animationOff,
             einkValue = false,
         )
+
+        // 3) 皮肤（Komga 侧）：E-Ink 生效 → 切 EINK；关闭 → 还原原皮肤 / 回落默认皮肤。
+        syncKomgaAppTheme(ui)
+    }
+
+    /**
+     * Komga 侧皮肤的收敛（E-Ink 开关只负责它自己写过的那一份）。
+     *
+     * 为什么是这一份：`KomihoTheme` 全局配色读的是 `KomgaPreferences.appTheme`，而全仓只有两处
+     * 写它 —— 设置页的皮肤列表与 E-Ink 开关（都在 `KomgaMainActivity`）。Mihon 侧
+     * `UiPreferences.appTheme` 是另一份存储（驱动 Activity 的 XML 主题），开关从未写过，故不代管。
+     *
+     * **迁移护栏**：本修复前就已开着 E-Ink 的用户，其皮肤就是 `EINK`。若无条件快照，关闭后会
+     * 「还原」成 EINK —— bug 换个形式复现。所以只在当前值不是 EINK 时才记快照；这也顺带让
+     * 「模式已关、皮肤仍是 EINK」这一存量坏状态在下一次 sync（App 启动即触发）时自愈。
+     *
+     * 幂等且可重复调用；异常由 [sync] 的 runCatching 兜住（皮肤读写失败只维持现状）。
+     */
+    private fun syncKomgaAppTheme(ui: UiPreferences) {
+        val komga = KomgaPreferences(Injekt.get<Application>())
+        val current = komga.appTheme
+        val einkName = AppTheme.EINK.name
+        if (ui.isEinkModeActive) {
+            if (!ui.einkBackupAppTheme.isSet() && current != einkName) {
+                ui.einkBackupAppTheme.set(current)
+            }
+            if (current != einkName) {
+                komga.appTheme = einkName
+            }
+        } else if (ui.einkBackupAppTheme.isSet()) {
+            komga.appTheme = ui.einkBackupAppTheme.get()
+            ui.einkBackupAppTheme.delete()
+        } else if (current == einkName) {
+            // 存量坏状态：升级前就开着 E-Ink、因此没有快照 → 回落到默认皮肤。
+            komga.appTheme = AppTheme.DEFAULT.name
+        }
     }
 
     /**
