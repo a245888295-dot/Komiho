@@ -7956,7 +7956,17 @@ private fun SmbCoverThumb(
         // 取不到封面/加载中回落 fileKindIcon（目录仍是文件夹图标）。
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(context)
-                .data(SmbCoverData(conn, entry.path, entry.lastModified, entry.isImage, entry.isDir, entry.isPdf))
+                .data(
+                    SmbCoverData(
+                        conn,
+                        entry.path,
+                        entry.lastModified,
+                        entry.isImage,
+                        entry.isDir,
+                        entry.isPdf,
+                        entry.isMobi,
+                    ),
+                )
                 .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,

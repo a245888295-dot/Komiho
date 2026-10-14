@@ -16,14 +16,17 @@ import app.mihonsy.komga.data.smb.SmbConnection
 import app.mihonsy.komga.data.smb.SmbRandomAccessSource
 import app.mihonsy.komga.data.smb.SmbSessionManager
 import app.mihonsy.komga.data.webdav.WebDavCredentialCrypto
+import eu.kanade.tachiyomi.util.mobi.MobiExtractor
 import eu.kanade.tachiyomi.util.pickCoverFirstImage
 import eu.kanade.tachiyomi.util.pdf.PdfRenderFallback
+import logcat.LogPriority
 import mihon.core.common.archive.ArchiveHandle
 import mihon.core.common.archive.ArchiveReader
 import mihon.core.common.archive.RemoteZipReader
 import okio.Buffer
 import okio.FileSystem
 import tachiyomi.core.common.util.system.ImageUtil
+import tachiyomi.core.common.util.system.logcat
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -101,6 +104,10 @@ class SmbCoverFetcher(
             }
             // SY: PDF 封面 = 整本落本地临时文件，系统 PdfRenderer 渲第 0 页（与 LocalCoverFetcher 同口径）。
             data.isPdf -> readPdfFirstPageBitmap(password)
+            // Komiho: MOBI/AZW3/AZW 封面 = 整本落临时文件 → libmobi 抽封面/首图（与 SmbCoverCache /
+            // WebDavCoverCache 的 generateFromMobi 同口径）。不能落到下面的归档分支 —— MOBI 不是 zip，
+            // 用 RemoteZipReader/libarchive 打开必然失败，这正是此前「MOBI 在 SMB 浏览器没封面」的原因。
+            data.isMobi -> readMobiCoverBitmap(password)
             data.isImage ->
                 // 单图：直接读文件字节。
                 SmbSessionManager.openFile(data.conn, password, data.relPath).use { f ->
@@ -183,6 +190,41 @@ class SmbCoverFetcher(
         return PdfRenderFallback.renderPageBitmap(tmp.absolutePath, 0, MAX_PX)
     }
 
+    /**
+     * Komiho: MOBI/AZW3/AZW 封面 —— 整本落本地临时文件后交 libmobi 抽图，取 `coverFile`（EXTH
+     * 封面）优先、否则第一张内嵌图（与 [app.mihonsy.komga.data.smb.SmbCoverCache] 的
+     * `generateFromMobi` 同引擎同口径）。DRM（[MobiExtractor] 抛异常）或纯文字书抽不出图 → 无封面。
+     *
+     * 临时目录刻意与章节封面那条路（`komiho_smb_mobi_cover`）**分开**：两者的临时文件名算法相同
+     * （`sha256(connId;relPath)`），共用目录会互相删掉对方正在抽的文件。抽完即清。
+     */
+    private fun readMobiCoverBitmap(password: String, relPath: String = data.relPath): Bitmap? {
+        val dir = File(context.cacheDir, DIR_MOBI).apply { mkdirs() }
+        val key = sha256("${data.conn.id};$relPath")
+        val tmp = File(dir, "$key.mobi")
+        val pagesDir = File(dir, "pages_$key")
+        return try {
+            if (!tmp.exists() || tmp.length() == 0L) {
+                runCatching {
+                    SmbSessionManager.openFile(data.conn, password, relPath).use { f ->
+                        f.getInputStream().buffered().use { input ->
+                            FileOutputStream(tmp).use { input.copyTo(it) }
+                        }
+                    }
+                }.getOrNull() ?: return null
+            }
+            val book = runCatching { MobiExtractor.extractImages(tmp, pagesDir) }.getOrNull() ?: return null
+            val img = book.coverFile ?: book.imageFiles.firstOrNull() ?: return null
+            decodeSampled({ ByteArrayInputStream(img.readBytes()) }, MAX_PX)
+        } catch (e: Throwable) {
+            logcat(LogPriority.INFO) { "[SmbCover] MOBI 封面生成失败：$relPath — ${e.message}" }
+            null
+        } finally {
+            runCatching { tmp.delete() }
+            runCatching { pagesDir.deleteRecursively() }
+        }
+    }
+
     /** 两次 decode：先读边界算 inSampleSize，再采样解码。 */
     private fun decodeSampled(open: () -> InputStream, maxPx: Int): Bitmap? {
         open().use { first ->
@@ -206,6 +248,9 @@ class SmbCoverFetcher(
     companion object {
         private const val MAX_PX = 450
         private const val JPEG_QUALITY = 80
+
+        /** MOBI/AZW3/AZW 抽图用的临时目录（cacheDir 下，抽完即清；与章节封面那条路分开）。 */
+        private const val DIR_MOBI = "komiho_smb_mobi_cover_browse"
     }
 }
 
@@ -219,6 +264,8 @@ data class SmbCoverData(
     val isDir: Boolean = false,
     /** SY: PDF 条目封面 = 系统 PdfRenderer 渲第 0 页（与 LocalCoverFetcher 同口径）。 */
     val isPdf: Boolean = false,
+    /** Komiho: MOBI/AZW3/AZW 条目封面 = 整本落临时文件 + libmobi 抽「EXTH 封面 / 首图」。 */
+    val isMobi: Boolean = false,
 )
 
 class SmbCoverKeyer : Keyer<SmbCoverData> {

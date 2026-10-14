@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.source.local.io.Format
 
 // SY --> Komiho Phase7：SMB 目录浏览。
 //
@@ -40,6 +41,13 @@ data class SmbEntry(
     /** 是否为 PDF 文件（封面需系统 PdfRenderer 渲第 0 页，区别于归档拆包取首图）。 */
     val isPdf: Boolean =
         !isDir && name.substringAfterLast('.', "").lowercase() == "pdf"
+
+    /**
+     * Komiho: 是否为 MOBI/AZW3/AZW（封面需 libmobi 抽「EXTH 封面 / 首图」，区别于归档拆包取首图）。
+     * 不这样标出来，浏览器封面会把它当 zip 交给 RemoteZipReader/libarchive 打开而失败。
+     */
+    val isMobi: Boolean =
+        !isDir && name.substringAfterLast('.', "").lowercase() in Format.MOBI_EXTENSIONS
 }
 
 /** 支持的归档扩展名（浏览过滤与条目判定共用）。epub 同为 zip 容器，阅读器有专门分支。
