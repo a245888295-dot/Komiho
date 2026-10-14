@@ -104,7 +104,6 @@ import eu.kanade.tachiyomi.util.pdf.PdfPasswordException
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
 import eu.kanade.tachiyomi.ui.reader.viewer.PaperPageTexture
-import eu.kanade.tachiyomi.ui.reader.viewer.Viewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerConfig
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
@@ -1168,17 +1167,11 @@ class ReaderActivity : BaseActivity() {
             viewer.config.doublePages = doublePages
             viewModel.setDoublePages(viewer.config.doublePages)
         }
-        val currentChapter = viewModel.state.value.currentChapter
-        if (doublePages) {
-            // If we're moving from singe to double, we want the current page to be the first page
-            val currentPage = viewModel.state.value.currentPage
-            // SY: currentPage 可能为 -1（章节刚载入、还没选中页面），take(-1) 会抛 IllegalArgumentException。
-            if (currentPage >= 0) {
-                viewer.config.shiftDoublePage = (
-                    currentPage + (currentChapter?.pages?.take(currentPage)?.count { it.fullPage || it.isolatedPage } ?: 0)
-                    ) % 2 != 0
-            }
-        }
+        // Komiho (2026-10-14): 「从单页切到双页时，当前页应当是跨页的第一页」这句原来的实现用的是
+        // **1 基**的 `state.currentPage`（`updateChapterProgress` 里写的是 `pageIndex + 1`），与对齐
+        // 函数（0 基 `requestedPage`）相差一页 —— 会把当前页配到跨页第二位。现在两处共用同一实现，
+        // 公式只有一份；单页模式由对齐函数自身提前返回。
+        alignDoublePageShiftToCurrentPage(viewer)
         viewModel.state.value.viewerChapters?.let {
             viewer.setChaptersDoubleShift(it)
         }
@@ -1203,51 +1196,40 @@ class ReaderActivity : BaseActivity() {
     }
 
     /**
-     * Komiho (2026-10-14): 把当前 viewer 的双页配对状态记进 ViewModel，供重建后恢复。
+     * Komiho (2026-10-14): 把双页配对对齐到**当前跨页的第一页**（幂等，可重复调用）。
      *
-     * 只在**旧 viewer 处于双页**时记录：转竖屏那一趟旧 viewer 会是单页（甚至连续重建），那时
-     * shift 与锚点已无意义，用空状态覆盖掉有效记录会让回横屏时无从恢复。
+     * 为什么是「现算」而不是「记住离开时的状态」：上一版做法记录 `adapter.pageToShift`（只有
+     * `updateShifting()` 会写，即手动切布局 / 手动「位移一页」时）与当时的 `shiftDoublePage`，
+     * 但**翻页不会更新它们** —— 翻过几跨之后记录就过期，原样写回反而把当前页配到跨页第二位
+     * （实机表现：双页里跳了下一页、旋转回来还是上一页）；而且每转一次都重放同一份过期状态，
+     * 偏差会累积。改成从当前位置推导后，结果是位置的纯函数，反复旋转不会漂移。
+     *
+     * 推导（与手动「位移一页」按钮同类语义：把整本按当前页对齐，故对已手动对齐的书不会回退 ——
+     * 那类书每一跨首页的奇偶一致，现算值与手动值相同）：
+     * - 锚点 = 当前跨页第一页 = `currChapter.pages[requestedPage]`
+     *   （双页下 `PagerViewer.onPageChange` 用 `joinedItems[i].first` 上报，`requestedPage` 就是它）；
+     * - `shift = (requestedPage + 它之前的整页/孤立页数) % 2 != 0`
+     *   —— 默认配对是 (0,1),(2,3)…（偶数页在跨页首位），shift 把配对整体错开一页，所以「有效
+     *   序号为奇」时才需要 shift；整页/孤立页各自独占一跨，用计数补偿。
+     *
+     * 单页模式直接返回（`PagerConfig` 的不变量：`doublePages == false` 时 `shiftDoublePage` 无意义）；
+     * 页码还没就绪（`requestedPage < 0`）也返回。`shiftDoublePage` 属布局，**不要**加进
+     * `PagerConfig.imageFingerprint()`。
      */
-    private fun snapshotDoublePageShift(prevViewer: Viewer?) {
-        val pager = prevViewer as? PagerViewer ?: return
-        if (!pager.config.doublePages) return
-        val anchor = pager.getShiftedPage()
-        val chapterId = anchor?.chapter?.chapter?.id
-        viewModel.rememberDoublePageShift(pager.config.shiftDoublePage, chapterId, anchor?.index)
+    private fun alignDoublePageShiftToCurrentPage(viewer: PagerViewer) {
+        if (!viewer.config.doublePages) return
+        val chapter = viewModel.state.value.viewerChapters?.currChapter ?: return
+        val pages = chapter.pages ?: return
+        val requested = chapter.requestedPage
+        if (requested < 0) return
+        val anchor = pages.getOrNull(requested)
+        val fullBefore = pages.take(requested).count { it.fullPage || it.isolatedPage }
+        viewer.config.shiftDoublePage = (requested + fullBefore) % 2 != 0
+        anchor?.let { viewer.updateShifting(it) }
         DiagLog.d(
             KOMIHA_DOUBLE_PAGE_TAG,
-            "snapshot shift=${pager.config.shiftDoublePage} " +
-                "anchor=${chapterId ?: "-"}/${anchor?.index ?: "-"}",
-        )
-    }
-
-    /**
-     * Komiho (2026-10-14): 把 [snapshotDoublePageShift] 记下的配对写回新 viewer。
-     *
-     * 幂等（读记录 → 写回，重复调用无副作用），且**不清除记录** —— 下一趟重建还要用。
-     * 写回的是记录值本身、不用 parity 重算：重算属于手动切布局按钮（[reloadChapters]）的既有语义。
-     *
-     * 锚点页按「章节 id + 章节内序号」反查（沿用原死代码的判据，避免跨章误命中）；跨章或找不到时
-     * 只写回 shift 布尔值 —— 此时新适配器的 `pageToShift` 为空，会从本章第一页开始错开，与旋转前
-     * 「锚点已失效」的状态一致，不制造新的变化。
-     *
-     * 必须在 `setDoublePageMode()` 之后调用：那一步按屏幕方向设置 `doublePages`，
-     * 并在关闭双页时清掉 `shiftDoublePage`（PagerConfig 的不变量）。
-     */
-    private fun restoreDoublePageShift(newViewer: PagerViewer) {
-        if (!newViewer.config.doublePages) return
-        val state = viewModel.state.value
-        val shift = state.lastShiftDoubleState ?: return
-        val anchor = state.viewerChapters?.currChapter?.pages?.firstOrNull {
-            it.index == state.indexPageToShift && it.chapter.chapter.id == state.indexChapterToShift
-        }
-        anchor?.let { newViewer.updateShifting(it) }
-        newViewer.config.shiftDoublePage = shift
-        DiagLog.d(
-            KOMIHA_DOUBLE_PAGE_TAG,
-            "restore shift=$shift anchor=${anchor?.index ?: "-"} " +
-                "(recorded=${state.indexChapterToShift ?: "-"}/${state.indexPageToShift ?: "-"}, " +
-                "resolved=${anchor != null})",
+            "align requested=$requested/${pages.size} fullBefore=$fullBefore " +
+                "shift=${viewer.config.shiftDoublePage} anchor=${anchor?.index ?: "-"}",
         )
     }
 // EXH <--
@@ -1280,10 +1262,6 @@ class ReaderActivity : BaseActivity() {
             setOrientation(viewModel.getMangaOrientation())
         }
 
-        // Komiho (2026-10-14): 拆掉旧 viewer **之前**先快照双页配对状态。必须在 destroy 之前 ——
-        // 之后适配器已不可依赖（`pageToShift` 随旧 viewer 作废）。
-        snapshotDoublePageShift(prevViewer)
-
         // Destroy previous viewer if there was one
         if (prevViewer != null) {
             prevViewer.destroy()
@@ -1298,11 +1276,12 @@ class ReaderActivity : BaseActivity() {
             if (readerPreferences.pageLayout.get() == PagerConfig.PageLayout.AUTOMATIC) {
                 setDoublePageMode(newViewer)
             }
-            // Komiho (2026-10-14): 把刚快照的配对写回新 viewer，替换原来那句
-            // `lastShiftDoubleState?.let { … }` —— 那个状态此前**没有任何写入点**（恒为 null），
-            // 于是旋转回来后配对退回默认排法、跨页整体挪一页。必须排在 setDoublePageMode 之后：
-            // 它按屏幕方向设置 doublePages，并在关闭双页时清掉 shiftDoublePage。
-            restoreDoublePageShift(newViewer)
+            // Komiho (2026-10-14): 按**当前位置**重新对齐双页配对（旋转回来仍停在原来那一跨）。
+            // 替换原来那句 `lastShiftDoubleState?.let { … }` —— 那个状态此前没有任何写入点
+            // （恒为 null），于是旋转后配对退回默认排法、跨页整体挪一页。必须排在
+            // setDoublePageMode 之后：它按屏幕方向设置 doublePages，并在关闭双页时清掉
+            // shiftDoublePage。此处幂等；紧接着的 setChapters() 还会再对齐一次（那时页列表才就绪）。
+            alignDoublePageShiftToCurrentPage(newViewer)
         }
 
         val manga = viewModel.state.value.manga
@@ -1411,14 +1390,26 @@ class ReaderActivity : BaseActivity() {
                 showOpeningHint()
             }
         }
-        // SY --> Komiho (2026-10-14): 这里原来有两支「重喂章节时恢复 / 重算双页配对」的代码，
-        // 判据分别是 state.indexChapterToShift+indexPageToShift 与 state.lastShiftDoubleState
-        // —— 而这三项此前**没有任何写入点**（恒为 null，等于死代码），所以旋转回来时配对照旧退回
-        // 默认排法、跨页整体挪一页。现在统一由 updateViewer() 处理：拆旧 viewer 前快照
-        // （snapshotDoublePageShift）、建好新 viewer 后原样写回（restoreDoublePageShift）；
-        // 恢复的是用户离开时的真实配对，而不是 parity 重算 —— 重算只保留在 reloadChapters()
-        // （手动切布局按钮的既有语义）。
+        // SY --> Komiho (2026-10-14): 旋转（viewer 重建）时页列表常常还没喂进来，真正生效的对齐
+        // 落在这里 —— 与 updateViewer() 共用 [alignDoublePageShiftToCurrentPage]，只依赖当前页，
+        // 因此两处都调是安全的（幂等）。这里原来有两支基于 state.indexChapterToShift /
+        // indexPageToShift 与 state.lastShiftDoubleState 的「恢复 / 重算」代码，那三项全仓没有任何
+        // 写入点（恒为 null，等于死代码），已随本次改动删除。
         // SY <--
+
+        (viewModel.state.value.viewer as? PagerViewer)?.let { pagerViewer ->
+            alignDoublePageShiftToCurrentPage(pagerViewer)
+            // 诊断：成对是异步落到 adapter 上的，下一帧再记「屏幕上实际是哪两页」——
+            // 配对错位时的实机表现就是这一对变成了相邻的另一跨。
+            if (pagerViewer.config.doublePages) {
+                pagerViewer.pager.post {
+                    DiagLog.d(
+                        KOMIHA_DOUBLE_PAGE_TAG,
+                        "spread(after setChapters)=${pagerViewer.currentSpreadForLog()}",
+                    )
+                }
+            }
+        }
 
         viewModel.state.value.viewer?.setChapters(viewerChapters)
 
