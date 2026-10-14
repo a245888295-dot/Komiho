@@ -19,9 +19,14 @@ import okio.FileSystem
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.source.local.io.Archive
 import eu.kanade.tachiyomi.util.pdf.PdfRenderFallback
+import eu.kanade.tachiyomi.util.mobi.MobiExtractor
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.source.local.io.Format
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.security.MessageDigest
 import kotlin.math.max
@@ -171,6 +176,11 @@ class LocalCoverFetcher(
             }.getOrNull()
             // SY <--
             ImageUtil.isImage(file.name) -> decodeSampled({ file.openInputStream() }, MAX_PX)
+            // SY --> Komiho: MOBI/AZW3/AZW 封面 = 整本落临时文件 → libmobi 抽「EXTH 封面 / 首图」
+            //（与 SMB / WebDAV 的 generateFromMobi 同口径）。SAF 的 content:// 拿不到可直读路径，
+            // 而 libmobi 只吃文件路径，所以必须先拷一份临时文件；DRM 书 / 纯文字书抽不出图 → 无封面。
+            isMobi(file.name) -> readMobiCoverBitmap(file)
+            // SY <--
             else -> null
         }
         return bitmap?.let { bmp ->
@@ -198,6 +208,43 @@ class LocalCoverFetcher(
         return null
     }
 
+    /** Komiho: 是否为 MOBI / AZW3 / AZW（Kindle 容器，共用 libmobi 抽图）。 */
+    private fun isMobi(name: String?): Boolean =
+        !name.isNullOrBlank() && name.substringAfterLast('.', "").lowercase() in Format.MOBI_EXTENSIONS
+
+    /**
+     * Komiho: MOBI/AZW3/AZW 封面 —— 整本落 cacheDir 临时文件后交 libmobi 抽图，取 `coverFile`
+     * （EXTH 封面）优先、否则第一张内嵌图（与 SMB / WebDAV 现有口径一致）。
+     *
+     * 为什么必须落临时文件：libmobi 只吃**文件路径**，而 SAF 的 `content://` 拿不到可直读路径。
+     * 抽完即清（临时 mobi + 抽出的 pages 目录）—— 一本几十 MB 的 AZW3 不该在 cacheDir 长期占地；
+     * 结果本身已按 450px JPEG 缓存在 filesDir（`komiho_local_covers`）。
+     */
+    private fun readMobiCoverBitmap(file: UniFile): Bitmap? {
+        val dir = File(context.cacheDir, DIR_MOBI).apply { mkdirs() }
+        val key = sha256("${file.uri};${data.lastModified}")
+        val tmp = File(dir, "$key.mobi")
+        val pagesDir = File(dir, "pages_$key")
+        return try {
+            if (!tmp.exists() || tmp.length() == 0L) {
+                val copied = file.openInputStream()?.use { input ->
+                    FileOutputStream(tmp).use { input.copyTo(it) }
+                    true
+                } ?: false
+                if (!copied) return null
+            }
+            val book = runCatching { MobiExtractor.extractImages(tmp, pagesDir) }.getOrNull() ?: return null
+            val img = book.coverFile ?: book.imageFiles.firstOrNull() ?: return null
+            decodeSampled({ ByteArrayInputStream(img.readBytes()) }, MAX_PX)
+        } catch (e: Throwable) {
+            logcat(LogPriority.INFO) { "[LocalCover] MOBI 封面生成失败：${file.name} — ${e.message}" }
+            null
+        } finally {
+            runCatching { tmp.delete() }
+            runCatching { pagesDir.deleteRecursively() }
+        }
+    }
+
     class Factory(private val context: Context) : Fetcher.Factory<LocalCoverData> {
         override fun create(data: LocalCoverData, options: Options, imageLoader: ImageLoader): Fetcher {
             return LocalCoverFetcher(context, data)
@@ -212,6 +259,9 @@ class LocalCoverFetcher(
         // 配 q80 单张约 40–70KB，本地缓存（komiho_local_covers）能装上千张而不占 Komga 共享池。
         private const val MAX_PX = 450
         private const val JPEG_QUALITY = 80
+
+        /** MOBI/AZW3/AZW 抽图用的临时目录（cacheDir 下，抽完即清）。 */
+        private const val DIR_MOBI = "komiho_local_mobi_cover"
     }
 }
 
