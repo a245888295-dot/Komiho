@@ -1395,10 +1395,11 @@ class ReaderViewModel @JvmOverloads constructor(
             setMangaViewerFlags.awaitSetReadingMode(manga.id, readingMode.flagValue.toLong())
             val currChapters = state.value.viewerChapters
             if (currChapters != null) {
-                // Save current page
-                val currChapter = currChapters.currChapter
-                currChapter.requestedPage = currChapter.chapter.last_page_read
-
+                // Komiho (2026-10-14): 不重置 requestedPage —— 它随翻页实时维护（`updateChapterProgress`
+                // 每次翻页写它；`ChapterLoader` 按 intent page 设好），而重建后 PagerViewer /
+                // WebtoonViewer 的首帧布局正是按它定位。上游那行取的是 DB 阅读进度 last_page_read：
+                // 普通阅读时二者相等，但无痕模式（`:1154` 的 if 不写 last_page_read）与「从书签/
+                // 续读跳页进入」时会不一致 → 切阅读模式把用户弹回旧页。与 c9fc3269 同口径。
                 mutableState.update {
                     it.copy(
                         manga = getManga.await(manga.id),
@@ -1431,10 +1432,8 @@ class ReaderViewModel @JvmOverloads constructor(
             setMangaViewerFlags.awaitSetOrientation(manga.id, orientation.flagValue.toLong())
             val currChapters = state.value.viewerChapters
             if (currChapters != null) {
-                // Save current page
-                val currChapter = currChapters.currChapter
-                currChapter.requestedPage = currChapter.chapter.last_page_read
-
+                // Komiho (2026-10-14): 同 setMangaReadingMode —— 不重置 requestedPage，让重建后的
+                // viewer 停在当前页（理由详见该处注释）。
                 mutableState.update {
                     it.copy(
                         manga = getManga.await(manga.id),
