@@ -109,6 +109,7 @@ import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
+import eu.kanade.tachiyomi.diagnostic.DiagLog
 import eu.kanade.tachiyomi.util.system.EinkMotion
 import eu.kanade.tachiyomi.util.system.isNightMode
 import eu.kanade.tachiyomi.util.system.openInBrowser
@@ -180,9 +181,13 @@ class ReaderActivity : BaseActivity() {
         /** Komiho: 退出阅读器时回到的 Komga 系列 id（仅 Komga 来源传入）。 */
         const val EXTRA_KOMGA_SERIES_ID = "komgaSeriesId"
 
-        const val SHIFT_DOUBLE_PAGES = "shiftingDoublePages"
-        const val SHIFTED_PAGE_INDEX = "shiftedPageIndex"
-        const val SHIFTED_CHAP_INDEX = "shiftedChapterIndex"
+        /**
+         * Komiho (2026-10-14): 双页配对「快照 / 恢复」的诊断 tag（导出的诊断日志里按它 grep）。
+         *
+         * 原先这里还有 `SHIFT_DOUBLE_PAGES` / `SHIFTED_PAGE_INDEX` / `SHIFTED_CHAP_INDEX` 三个常量，
+         * 全仓无人引用（那套基于 Intent/SavedState 的持久化从未实现），随本次改动一并删除。
+         */
+        private const val KOMIHA_DOUBLE_PAGE_TAG = "KomihoDoublePage"
     }
 
     private val readerPreferences = Injekt.get<ReaderPreferences>()
@@ -1195,6 +1200,55 @@ class ReaderActivity : BaseActivity() {
             }
         }
     }
+
+    /**
+     * Komiho (2026-10-14): 把当前 viewer 的双页配对状态记进 ViewModel，供重建后恢复。
+     *
+     * 只在**旧 viewer 处于双页**时记录：转竖屏那一趟旧 viewer 会是单页（甚至连续重建），那时
+     * shift 与锚点已无意义，用空状态覆盖掉有效记录会让回横屏时无从恢复。
+     */
+    private fun snapshotDoublePageShift(prevViewer: Viewer?) {
+        val pager = prevViewer as? PagerViewer ?: return
+        if (!pager.config.doublePages) return
+        val anchor = pager.getShiftedPage()
+        val chapterId = anchor?.chapter?.chapter?.id
+        viewModel.rememberDoublePageShift(pager.config.shiftDoublePage, chapterId, anchor?.index)
+        DiagLog.d(
+            KOMIHA_DOUBLE_PAGE_TAG,
+            "snapshot shift=${pager.config.shiftDoublePage} " +
+                "anchor=${chapterId ?: "-"}/${anchor?.index ?: "-"}",
+        )
+    }
+
+    /**
+     * Komiho (2026-10-14): 把 [snapshotDoublePageShift] 记下的配对写回新 viewer。
+     *
+     * 幂等（读记录 → 写回，重复调用无副作用），且**不清除记录** —— 下一趟重建还要用。
+     * 写回的是记录值本身、不用 parity 重算：重算属于手动切布局按钮（[reloadChapters]）的既有语义。
+     *
+     * 锚点页按「章节 id + 章节内序号」反查（沿用原死代码的判据，避免跨章误命中）；跨章或找不到时
+     * 只写回 shift 布尔值 —— 此时新适配器的 `pageToShift` 为空，会从本章第一页开始错开，与旋转前
+     * 「锚点已失效」的状态一致，不制造新的变化。
+     *
+     * 必须在 `setDoublePageMode()` 之后调用：那一步按屏幕方向设置 `doublePages`，
+     * 并在关闭双页时清掉 `shiftDoublePage`（PagerConfig 的不变量）。
+     */
+    private fun restoreDoublePageShift(newViewer: PagerViewer) {
+        if (!newViewer.config.doublePages) return
+        val state = viewModel.state.value
+        val shift = state.lastShiftDoubleState ?: return
+        val anchor = state.viewerChapters?.currChapter?.pages?.firstOrNull {
+            it.index == state.indexPageToShift && it.chapter.chapter.id == state.indexChapterToShift
+        }
+        anchor?.let { newViewer.updateShifting(it) }
+        newViewer.config.shiftDoublePage = shift
+        DiagLog.d(
+            KOMIHA_DOUBLE_PAGE_TAG,
+            "restore shift=$shift anchor=${anchor?.index ?: "-"} " +
+                "(recorded=${state.indexChapterToShift ?: "-"}/${state.indexPageToShift ?: "-"}, " +
+                "resolved=${anchor != null})",
+        )
+    }
 // EXH <--
 
     /**
@@ -1225,6 +1279,10 @@ class ReaderActivity : BaseActivity() {
             setOrientation(viewModel.getMangaOrientation())
         }
 
+        // Komiho (2026-10-14): 拆掉旧 viewer **之前**先快照双页配对状态。必须在 destroy 之前 ——
+        // 之后适配器已不可依赖（`pageToShift` 随旧 viewer 作废）。
+        snapshotDoublePageShift(prevViewer)
+
         // Destroy previous viewer if there was one
         if (prevViewer != null) {
             prevViewer.destroy()
@@ -1239,7 +1297,11 @@ class ReaderActivity : BaseActivity() {
             if (readerPreferences.pageLayout.get() == PagerConfig.PageLayout.AUTOMATIC) {
                 setDoublePageMode(newViewer)
             }
-            viewModel.state.value.lastShiftDoubleState?.let { newViewer.config.shiftDoublePage = it }
+            // Komiho (2026-10-14): 把刚快照的配对写回新 viewer，替换原来那句
+            // `lastShiftDoubleState?.let { … }` —— 那个状态此前**没有任何写入点**（恒为 null），
+            // 于是旋转回来后配对退回默认排法、跨页整体挪一页。必须排在 setDoublePageMode 之后：
+            // 它按屏幕方向设置 doublePages，并在关闭双页时清掉 shiftDoublePage。
+            restoreDoublePageShift(newViewer)
         }
 
         val manga = viewModel.state.value.manga
@@ -1348,26 +1410,13 @@ class ReaderActivity : BaseActivity() {
                 showOpeningHint()
             }
         }
-        // SY -->
-        val state = viewModel.state.value
-        if (state.indexChapterToShift != null && state.indexPageToShift != null) {
-            viewerChapters.currChapter.pages?.find {
-                it.index == state.indexPageToShift && it.chapter.chapter.id == state.indexChapterToShift
-            }?.let {
-                (viewModel.state.value.viewer as? PagerViewer)?.updateShifting(it)
-            }
-            viewModel.setIndexChapterToShift(null)
-            viewModel.setIndexPageToShift(null)
-        } else if (state.lastShiftDoubleState != null) {
-            val currentChapter = viewerChapters.currChapter
-            (viewModel.state.value.viewer as? PagerViewer)?.config?.shiftDoublePage = (
-                currentChapter.requestedPage +
-                    (
-                        currentChapter.pages?.take(currentChapter.requestedPage)
-                            ?.count { it.fullPage || it.isolatedPage } ?: 0
-                        )
-                ) % 2 != 0
-        }
+        // SY --> Komiho (2026-10-14): 这里原来有两支「重喂章节时恢复 / 重算双页配对」的代码，
+        // 判据分别是 state.indexChapterToShift+indexPageToShift 与 state.lastShiftDoubleState
+        // —— 而这三项此前**没有任何写入点**（恒为 null，等于死代码），所以旋转回来时配对照旧退回
+        // 默认排法、跨页整体挪一页。现在统一由 updateViewer() 处理：拆旧 viewer 前快照
+        // （snapshotDoublePageShift）、建好新 viewer 后原样写回（restoreDoublePageShift）；
+        // 恢复的是用户离开时的真实配对，而不是 parity 重算 —— 重算只保留在 reloadChapters()
+        // （手动切布局按钮的既有语义）。
         // SY <--
 
         viewModel.state.value.viewer?.setChapters(viewerChapters)

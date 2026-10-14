@@ -1485,12 +1485,50 @@ class ReaderViewModel @JvmOverloads constructor(
         mutableState.update { it.copy(ehUtilsVisible = visible) }
     }
 
-    fun setIndexChapterToShift(index: Long?) {
-        mutableState.update { it.copy(indexChapterToShift = index) }
+    // Komiho (2026-10-14): 原先这里还有 setIndexChapterToShift / setIndexPageToShift 两个单字段
+    // setter —— 它们没有任何调用者（配合那套从未实现的双页持久化），已被下面一次 copy 写全三个
+    // 字段的 rememberDoublePageShift / clearDoublePageShift 取代。
+
+
+    /**
+     * Komiho (2026-10-14): 记录「双页配对状态」，供 viewer 重建（旋转 / 主题重建等）后原样恢复。
+     *
+     * 为什么需要：双页不是简单的两页一屏 —— 配对由 `PagerConfig.shiftDoublePage`（是否错开）
+     * 与 `PagerViewerAdapter.pageToShift`（从哪一页开始错开）共同决定，**错开点之后所有页整体
+     * 挪一格**。而「横屏双页 → 竖屏单页」那一趟会把 `doublePages` 置 false，其 setter 顺手清掉
+     * `shiftDoublePage`（PagerConfig.kt 的不变量），适配器也随旧 viewer 一起销毁（`pageToShift`
+     * 丢失）⇒ 回到横屏时配对退回「偶数页在左」的默认排法，与离开前相差一页，用户看到的就是
+     * 「整个跨页挪了一页」。
+     *
+     * 这里把离开双页时的两个输入量记在 ViewModel 里（随 Activity 重建存活），由 `ReaderActivity`
+     * 在建好新 viewer 后写回。
+     *
+     * @param shift 当时的 `PagerConfig.shiftDoublePage`
+     * @param chapterId 锚点页所属章节（`ReaderChapter.chapter.id`），跨章时用于校验
+     * @param pageIndex 锚点页在章节内的序号（`ReaderPage.index`），即当时的 `pageToShift`
+     */
+    fun rememberDoublePageShift(shift: Boolean, chapterId: Long?, pageIndex: Int?) {
+        mutableState.update {
+            it.copy(
+                lastShiftDoubleState = shift,
+                indexChapterToShift = chapterId,
+                indexPageToShift = pageIndex,
+            )
+        }
     }
 
-    fun setIndexPageToShift(index: Int?) {
-        mutableState.update { it.copy(indexPageToShift = index) }
+    /**
+     * 丢弃双页配对记录（一次 copy 清三个字段）。记录不存在时恢复逻辑按默认配对走，
+     * 因此这是「明确放弃恢复」而不是「恢复成默认」。
+     */
+    fun clearDoublePageShift() {
+        mutableState.update {
+            it.copy(
+                lastShiftDoubleState = null,
+                indexChapterToShift = null,
+                indexPageToShift = null,
+            )
+        }
     }
 
     fun openChapterListDialog() {
@@ -1964,6 +2002,10 @@ class ReaderViewModel @JvmOverloads constructor(
         // SY -->
         val currentPageText: String = "",
         val ehUtilsVisible: Boolean = false,
+        // Komiho (2026-10-14): 双页配对快照（见 rememberDoublePageShift / clearDoublePageShift）。
+        // 这三项以前**只被读取**、写入点从未实现（等于死代码，`lastShiftDoubleState` 恒为 null），
+        // 导致旋转回来后配对退回默认、跨页整体挪一页。现在由 ReaderActivity 在拆卸旧 viewer 前
+        // 写入、建好新 viewer 后读回。
         val lastShiftDoubleState: Boolean? = null,
         val indexPageToShift: Int? = null,
         val indexChapterToShift: Long? = null,
