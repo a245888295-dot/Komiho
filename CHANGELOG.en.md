@@ -1,5 +1,18 @@
 # Komiho Changelog
 
+## v1.5.0 (2026-10-14)
+
+- New E-Ink mode (Settings → Appearance): the reader switches to a dedicated E-Ink grayscale mode. Tested on a limited set of devices — feedback and suggestions are welcome
+- New MOBI/AZW3/AZW support
+- New Reading background "Parchment / Kraft"
+- New Deep crop: crops by the connected-component content bounding box, cutting through black frames, watermarks and page numbers
+- New Settings → About → Feedback & suggestions (GitHub issue / Tencent Survey)
+- Improved WebDAV covers now also work for folders (WebDAV → show covers)
+- Improved Super-resolution scheduling: a page preempted by rapid taps in paged mode is re-run after the paging pause
+- Fixed Double-page pairing got out of sync after rotating the screen
+- Fixed Bottom navigation icons were squeezed by the system navigation bar
+- Fixed Missing simplified/traditional Chinese translations in the reader menu and some settings
+
 ## v1.4.1 (2026-10-04)
 
 - Fixed Reading history could not record the page number

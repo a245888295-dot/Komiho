@@ -5,6 +5,19 @@
   新增版本時三份都要同步。
 -->
 <changelog bulletedList="true">
+    <changelogversion versionName="1.5.0" changeDate="October 14, 2026">
+        <changelogtext>[b]Komiho 1.5.0[/b]</changelogtext>
+        <changelogtext>[b]新增[/b] E-Ink 模式，入口：設定-外觀；啟動後閱讀器切換 EINK 專用灰階模式，測試裝置有限，歡迎回饋建議</changelogtext>
+        <changelogtext>[b]新增[/b] MOBI/AZW3/AZW 支援</changelogtext>
+        <changelogtext>[b]新增[/b] 閱讀背景「羊皮紙 / 牛皮紙」</changelogtext>
+        <changelogtext>[b]新增[/b] 深度裁剪邊緣：依連通域內容包圍盒裁切，可穿過黑框線、浮水印與頁碼</changelogtext>
+        <changelogtext>[b]新增[/b] 關於頁「問題建議回饋」（GitHub issue / 騰訊問卷）</changelogtext>
+        <changelogtext>[b]優化[/b] WebDAV 封面現在對資料夾也生效（WebDAV-顯示-顯示封面）</changelogtext>
+        <changelogtext>[b]優化[/b] 超分排程：分頁模式快速點擊搶占停頓後自動補算</changelogtext>
+        <changelogtext>[b]修復[/b] 雙頁模式旋轉螢幕後跨頁配對錯位</changelogtext>
+        <changelogtext>[b]修復[/b] 底部導覽列圖示被系統導覽鍵擠壓</changelogtext>
+        <changelogtext>[b]修復[/b] 閱讀選單與設定項缺少的簡繁翻譯</changelogtext>
+    </changelogversion>
     <changelogversion versionName="1.4.1" changeDate="October 4, 2026">
         <changelogtext>[b]Komiho 1.4.1[/b]</changelogtext>
         <changelogtext>[b]修復[/b] 歷史無法寫入頁數</changelogtext>

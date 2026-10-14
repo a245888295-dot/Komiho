@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <changelog bulletedList="true">
+    <changelogversion versionName="1.5.0" changeDate="October 14,2026">
+        <changelogtext>[b]Komiho 1.5.0[/b]</changelogtext>
+        <changelogtext>[b]新增[/b] E-Ink 模式，入口：设置-外观；启动后阅读器切换 EINK 专用灰度模式，测试设备有限，欢迎反馈建议</changelogtext>
+        <changelogtext>[b]新增[/b] MOBI/AZW3/AZW 支持</changelogtext>
+        <changelogtext>[b]新增[/b] 阅读背景「羊皮纸 / 牛皮纸」</changelogtext>
+        <changelogtext>[b]新增[/b] 深度裁剪边缘：按连通域内容包围盒裁切，可穿过黑框线、水印与页码</changelogtext>
+        <changelogtext>[b]新增[/b] 关于页「问题建议反馈」（GitHub issue / 腾讯问卷）</changelogtext>
+        <changelogtext>[b]优化[/b] WebDAV 封面现在对文件夹也生效（WebDAV-显示-显示封面）</changelogtext>
+        <changelogtext>[b]优化[/b] 超分调度：分页模式快速点击抢断停顿后自动补算</changelogtext>
+        <changelogtext>[b]修复[/b] 双页模式旋转屏幕后跨页配对错位</changelogtext>
+        <changelogtext>[b]修复[/b] 底部导航栏图标被系统导航键挤压</changelogtext>
+        <changelogtext>[b]修复[/b] 阅读菜单与设置项缺失的简繁翻译</changelogtext>
+    </changelogversion>
     <changelogversion versionName="1.4.1" changeDate="October 4,2026">
         <changelogtext>[b]Komiho 1.4.1[/b]</changelogtext>
         <changelogtext>[b]修复[/b] 历史无法写入页数</changelogtext>

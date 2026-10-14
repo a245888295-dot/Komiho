@@ -6,6 +6,19 @@
   Keep both files in sync when adding a release.
 -->
 <changelog bulletedList="true">
+    <changelogversion versionName="1.5.0" changeDate="October 14, 2026">
+        <changelogtext>[b]Komiho 1.5.0[/b]</changelogtext>
+        <changelogtext>[b]New[/b] E-Ink mode (Settings → Appearance): the reader switches to a dedicated E-Ink grayscale mode. Tested on a limited set of devices — feedback and suggestions are welcome</changelogtext>
+        <changelogtext>[b]New[/b] MOBI/AZW3/AZW support</changelogtext>
+        <changelogtext>[b]New[/b] Reading background "Parchment / Kraft"</changelogtext>
+        <changelogtext>[b]New[/b] Deep crop: crops by the connected-component content bounding box, cutting through black frames, watermarks and page numbers</changelogtext>
+        <changelogtext>[b]New[/b] Settings → About → Feedback &amp; suggestions (GitHub issue / Tencent Survey)</changelogtext>
+        <changelogtext>[b]Improved[/b] WebDAV covers now also work for folders (WebDAV → show covers)</changelogtext>
+        <changelogtext>[b]Improved[/b] Super-resolution scheduling: a page preempted by rapid taps in paged mode is re-run after the paging pause</changelogtext>
+        <changelogtext>[b]Fixed[/b] Double-page pairing got out of sync after rotating the screen</changelogtext>
+        <changelogtext>[b]Fixed[/b] Bottom navigation icons were squeezed by the system navigation bar</changelogtext>
+        <changelogtext>[b]Fixed[/b] Missing simplified/traditional Chinese translations in the reader menu and some settings</changelogtext>
+    </changelogversion>
     <changelogversion versionName="1.4.1" changeDate="October 4, 2026">
         <changelogtext>[b]Komiho 1.4.1[/b]</changelogtext>
         <changelogtext>[b]Fixed[/b] Reading history could not record the page number</changelogtext>
