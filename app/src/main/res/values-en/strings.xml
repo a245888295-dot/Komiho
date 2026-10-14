@@ -164,6 +164,7 @@
     <string name="about_version">Version %1$s</string>
     <string name="about_changelog">What\'s new</string>
     <string name="about_source_code">Source code</string>
+    <string name="about_report_bug">Report a problem</string>
     <string name="about_check_update">Check for updates</string>
     <string name="about_up_to_date">You are on the latest version</string>
     <string name="about_os_too_old">Your Android version is too old for updates</string>

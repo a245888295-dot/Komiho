@@ -176,6 +176,7 @@
     <string name="about_check_update">检查更新</string>
     <string name="about_changelog">更新日志</string>
     <string name="about_source_code">源代码</string>
+    <string name="about_report_bug">问题反馈</string>
     <string name="about_up_to_date">已是最新版本</string>
     <string name="about_os_too_old">当前系统版本过低，无法接收更新</string>
     <string name="about_description">支持 Komga、本地、WebDAV、SMB 的漫画阅读器</string>

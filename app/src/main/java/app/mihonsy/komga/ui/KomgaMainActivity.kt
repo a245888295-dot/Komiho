@@ -5096,6 +5096,15 @@ private fun hostOf(url: String): String {
     }.getOrDefault(url)
 }
 
+/**
+ * Komiho: 「问题反馈」入口的目标地址。
+ *
+ * 现指向 GitHub 新建 issue 页，并带上 Bug 模板 —— `?template=` 会自动选中
+ * `.github/ISSUE_TEMPLATE/report_issue.yml` 并套用模板里声明的 `labels: [bug]`。
+ * **腾讯文档表单建好后，只需替换这一行**（问卷字段清单见 `docs/bug-report-survey.md`）。
+ */
+private const val KOMIHA_BUG_REPORT_URL = "https://github.com/ruzhe85/Komiho/issues/new?template=report_issue.yml"
+
 @Composable
 private fun KomgaAbout(
     modifier: Modifier,
@@ -5211,6 +5220,21 @@ private fun KomgaAbout(
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     }
                 }
+            },
+        )
+        // Komiho: 问题反馈入口 —— 与下面「源代码」同构（点一下直接跳浏览器）。目标地址见
+        // [KOMIHA_BUG_REPORT_URL]：现指 GitHub 新建 issue 页（自动选中 Bug 模板），
+        // 腾讯文档表单建好后替换那个常量即可。
+        AboutActionRow(
+            title = composeStringResource(R.string.about_report_bug),
+            onClick = { context.openInBrowser(KOMIHA_BUG_REPORT_URL) },
+            trailing = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
             },
         )
         AboutActionRow(
