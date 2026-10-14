@@ -176,7 +176,12 @@
     <string name="about_check_update">检查更新</string>
     <string name="about_changelog">更新日志</string>
     <string name="about_source_code">源代码</string>
-    <string name="about_report_bug">问题反馈</string>
+    <string name="about_feedback">问题建议反馈</string>
+    <string name="feedback_dialog_title">选择反馈渠道</string>
+    <string name="feedback_github">GitHub Issue</string>
+    <string name="feedback_github_summary">需 GitHub 账号 · 便于跟踪进度</string>
+    <string name="feedback_tencent">腾讯问卷</string>
+    <string name="feedback_tencent_summary">免登录 · 一分钟填完</string>
     <string name="about_up_to_date">已是最新版本</string>
     <string name="about_os_too_old">当前系统版本过低，无法接收更新</string>
     <string name="about_description">支持 Komga、本地、WebDAV、SMB 的漫画阅读器</string>

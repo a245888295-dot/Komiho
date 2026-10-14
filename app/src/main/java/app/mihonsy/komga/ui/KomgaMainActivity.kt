@@ -5097,13 +5097,17 @@ private fun hostOf(url: String): String {
 }
 
 /**
- * Komiho: 「问题反馈」入口的目标地址。
+ * Komiho: 「问题建议反馈」的两个渠道（关于页点进去后二选一）。
  *
- * 现指向 GitHub 新建 issue 页，并带上 Bug 模板 —— `?template=` 会自动选中
- * `.github/ISSUE_TEMPLATE/report_issue.yml` 并套用模板里声明的 `labels: [bug]`。
- * **腾讯文档表单建好后，只需替换这一行**（问卷字段清单见 `docs/bug-report-survey.md`）。
+ * - GitHub：新建 issue 页，`?template=` 自动选中 `.github/ISSUE_TEMPLATE/report_issue.yml`
+ *   并套用模板里声明的 `labels: [bug]`；适合能登录 GitHub、希望跟踪进度的用户。
+ * - 腾讯问卷：免登录收集表，字段与 GitHub 模板一致（见 `docs/bug-report-survey.md`），
+ *   适合不方便注册 GitHub 的用户。
  */
-private const val KOMIHA_BUG_REPORT_URL = "https://github.com/ruzhe85/Komiho/issues/new?template=report_issue.yml"
+private const val KOMIHA_FEEDBACK_GITHUB_URL =
+    "https://github.com/ruzhe85/Komiho/issues/new?template=report_issue.yml"
+
+private const val KOMIHA_FEEDBACK_SURVEY_URL = "https://wj.qq.com/s2/28205488/fiyd/"
 
 @Composable
 private fun KomgaAbout(
@@ -5114,6 +5118,8 @@ private fun KomgaAbout(
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var showChangelog by remember { mutableStateOf(false) }
+    // Komiho: 问题建议反馈的渠道选择弹窗（GitHub / 腾讯问卷）。
+    var showFeedbackDialog by remember { mutableStateOf(false) }
 
     // SY --> Komiho: 用真实 APP 启动图标。不能用 painterResource(R.mipmap.ic_launcher)——
     // API 26+ 会解析到 mipmap-anydpi-v26 的自适应图标 XML（AdaptiveIconDrawable），
@@ -5222,12 +5228,11 @@ private fun KomgaAbout(
                 }
             },
         )
-        // Komiho: 问题反馈入口 —— 与下面「源代码」同构（点一下直接跳浏览器）。目标地址见
-        // [KOMIHA_BUG_REPORT_URL]：现指 GitHub 新建 issue 页（自动选中 Bug 模板），
-        // 腾讯文档表单建好后替换那个常量即可。
+        // Komiho: 问题建议反馈 —— 点开后二选一（GitHub issue 模板 / 腾讯问卷·免登录），
+        // 两个渠道的字段一致，地址见 [KOMIHA_FEEDBACK_GITHUB_URL] / [KOMIHA_FEEDBACK_SURVEY_URL]。
         AboutActionRow(
-            title = composeStringResource(R.string.about_report_bug),
-            onClick = { context.openInBrowser(KOMIHA_BUG_REPORT_URL) },
+            title = composeStringResource(R.string.about_feedback),
+            onClick = { showFeedbackDialog = true },
             trailing = {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
@@ -5262,6 +5267,44 @@ private fun KomgaAbout(
 
     if (showChangelog) {
         WhatsNewDialog(onDismissRequest = { showChangelog = false })
+    }
+
+    // Komiho: 反馈渠道二选一。样式对齐设置页其它「列表选择」弹窗（无按钮：点条目即选，点外部取消）。
+    if (showFeedbackDialog) {
+        val channels = listOf(
+            Triple(R.string.feedback_github, R.string.feedback_github_summary, KOMIHA_FEEDBACK_GITHUB_URL),
+            Triple(R.string.feedback_tencent, R.string.feedback_tencent_summary, KOMIHA_FEEDBACK_SURVEY_URL),
+        )
+        AlertDialog(
+            onDismissRequest = { showFeedbackDialog = false },
+            title = { Text(composeStringResource(R.string.feedback_dialog_title)) },
+            text = {
+                Column {
+                    channels.forEach { (titleRes, summaryRes, url) ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showFeedbackDialog = false
+                                    context.openInBrowser(url)
+                                }
+                                .padding(vertical = 12.dp),
+                        ) {
+                            Text(
+                                text = composeStringResource(titleRes),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                text = composeStringResource(summaryRes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
     }
 }
 

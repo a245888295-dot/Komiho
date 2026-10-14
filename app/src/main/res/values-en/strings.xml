@@ -164,7 +164,12 @@
     <string name="about_version">Version %1$s</string>
     <string name="about_changelog">What\'s new</string>
     <string name="about_source_code">Source code</string>
-    <string name="about_report_bug">Report a problem</string>
+    <string name="about_feedback">Feedback &amp; suggestions</string>
+    <string name="feedback_dialog_title">Choose a feedback channel</string>
+    <string name="feedback_github">GitHub Issue</string>
+    <string name="feedback_github_summary">GitHub account required · easier to track progress</string>
+    <string name="feedback_tencent">Tencent Survey</string>
+    <string name="feedback_tencent_summary">No sign-in · takes a minute</string>
     <string name="about_check_update">Check for updates</string>
     <string name="about_up_to_date">You are on the latest version</string>
     <string name="about_os_too_old">Your Android version is too old for updates</string>

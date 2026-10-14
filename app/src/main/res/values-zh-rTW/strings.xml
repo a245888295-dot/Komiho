@@ -162,7 +162,12 @@
     <string name="about_version">版本 %1$s</string>
     <string name="about_changelog">更新日誌</string>
     <string name="about_source_code">原始碼</string>
-    <string name="about_report_bug">問題回報</string>
+    <string name="about_feedback">問題建議回饋</string>
+    <string name="feedback_dialog_title">選擇回饋管道</string>
+    <string name="feedback_github">GitHub Issue</string>
+    <string name="feedback_github_summary">需 GitHub 帳號 · 便於追蹤進度</string>
+    <string name="feedback_tencent">騰訊問卷</string>
+    <string name="feedback_tencent_summary">免登入 · 一分鐘填完</string>
     <string name="about_check_update">檢查更新</string>
     <string name="about_up_to_date">已是最新版本</string>
     <string name="about_os_too_old">目前系統版本過低，無法接收更新</string>
