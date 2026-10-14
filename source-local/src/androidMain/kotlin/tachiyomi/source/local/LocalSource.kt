@@ -614,7 +614,11 @@ private fun pdfCoverStream(context: Context, file: UniFile): InputStream? {
 // 此处自持一份只读封面的最小 PDB/MOBI/EXTH 头解析（同 pdfCoverStream 先例）。图片记录
 // 本身不压缩，无需 PalmDOC 解压：PDB 记录表 → record0 的 MOBI 头取 firstImageIndex、
 // EXTH 201 取 coveroffset → 封面记录 = firstImageIndex + coveroffset，读出后按魔数校验
-// （与 libmobi mobi_determine_resource_type 同口径），任何一步不合预期就返回 null 无封面。
+// （与 libmobi mobi_determine_resource_type 同口径）。
+// Komiho (2026-10-14): 没有 EXTH 201 时**回退第一张内嵌图**（coveroffset 视作 0），与 SMB /
+// WebDAV 侧 generateFromMobi 的「coverFile ?: imageFiles.first」同口径 —— 不少自制/转换的
+// MOBI 根本没写 EXTH 封面，此前这些书在书库里永远无封面。首条记录若不是图片，仍由下面的
+// 魔数校验退回 null（等价「无封面」），所以回退不会引入错图。
 private fun mobiCoverStream(context: Context, file: UniFile): InputStream? {
     val pfd = if (file.uri?.scheme == "file" && file.filePath != null) {
         ParcelFileDescriptor.open(File(file.filePath!!), ParcelFileDescriptor.MODE_READ_ONLY)
@@ -687,7 +691,8 @@ private fun mobiCoverStream(context: Context, file: UniFile): InputStream? {
                 p += len
             }
         }
-        if (coverOffset < 0) return null
+        // Komiho (2026-10-14): 未写 EXTH 201 时回退第一张内嵌图（见上）。
+        if (coverOffset < 0) coverOffset = 0L
 
         val coverIndex = firstImageIndex + coverOffset
         if (coverIndex >= numRecords) return null
