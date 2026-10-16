@@ -1,6 +1,9 @@
 package eu.kanade.presentation.reader.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,8 +18,12 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
@@ -134,6 +141,76 @@ internal fun AiAdvancedOptions(preferences: ReaderPreferences) {
             }
         }
     }
+
+    // ── DSH (2026-10-16): 对齐 komikku_img_upscale 的三个设置 ────────────────
+    // 最大处理分辨率：解码后等比缩到此范围内再喂 AI → 输出 = min(源长边, 上限) × 倍率。
+    // 0 = 不限制（此时由「高分辨率图强制增强」决定是否放宽到 2048）。
+    val maxProcW by preferences.aiMaxProcessWidth.collectAsState()
+    val maxProcH by preferences.aiMaxProcessHeight.collectAsState()
+    EnhancementParamLabel("最大处理分辨率（0 = 不限制）")
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(horizontal = SettingsItemsPaddings.Horizontal),
+    ) {
+        AiNumberField("宽度", maxProcW) { preferences.aiMaxProcessWidth.set(it) }
+        AiNumberField("高度", maxProcH) { preferences.aiMaxProcessHeight.set(it) }
+    }
+
+    // 最大分辨率：超过就跳过增强、原图直出。0 = 不限制。
+    val skipMaxW by preferences.aiSkipMaxWidth.collectAsState()
+    val skipMaxH by preferences.aiSkipMaxHeight.collectAsState()
+    EnhancementParamLabel("最大分辨率（超过则跳过增强，0 = 不限制）")
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(horizontal = SettingsItemsPaddings.Horizontal),
+    ) {
+        AiNumberField("宽度", skipMaxW) { preferences.aiSkipMaxWidth.set(it) }
+        AiNumberField("高度", skipMaxH) { preferences.aiSkipMaxHeight.set(it) }
+    }
+
+    // 预加载页数：分页模式提前算好几页，翻页才不用干等推理。
+    val preloadPages by preferences.aiPreloadPages.collectAsState()
+    EnhancementParamLabel("预加载页数")
+    SettingsChipRow {
+        ReaderPreferences.AiPreloadPageOptions.forEach { value ->
+            FilterChip(
+                selected = preloadPages == value,
+                onClick = { preferences.aiPreloadPages.set(value) },
+                label = { Text("${value}页") },
+            )
+        }
+    }
+    Text(
+        text = "每页一次推理（3x 约 1.5s/页）；预处理缓存上限 4 页，超过的深度不会生效",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(
+            start = SettingsItemsPaddings.Horizontal,
+            end = SettingsItemsPaddings.Horizontal,
+            bottom = 6.dp,
+        ),
+    )
+}
+
+/**
+ * DSH: 数字输入框（0 = 不限制）。只接受数字，输入即写偏好 —— 语义与 komikku 的
+ * realCuganMaxSizeWidth/Height 一致。
+ */
+@Composable
+private fun AiNumberField(label: String, value: Int, onSet: (Int) -> Unit) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { raw ->
+            val digits = raw.filter { it.isDigit() }.take(5)
+            text = digits
+            onSet(digits.toIntOrNull() ?: 0)
+        },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.width(150.dp),
+    )
 }
 
 /** 详情页里的小标题（「模型」「分块大小」），比一级的分组标题弱一级。 */

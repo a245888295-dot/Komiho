@@ -42,6 +42,9 @@ object EnhanceTimings {
         /** 输入位图已被回收。 */
         RECYCLED("跳过·源已释放"),
 
+        /** DSH: 源图超过「最大分辨率」设置（0 = 不限），按用户设定跳过增强。 */
+        SKIP_MAX_SIZE("跳过·超最大分辨率"),
+
         UNKNOWN("跳过"),
     }
 

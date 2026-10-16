@@ -81,6 +81,9 @@ class PagerPreparedPage(
  */
 class PagerPreparedCache(private val maxSize: Int = 3) {
 
+    /** DSH: 缓存容量 —— 预热深度不能超过它（超了算完就被淘汰，纯白烧推理）。 */
+    val capacity: Int get() = maxSize
+
     private val lock = Any()
     private val map = LinkedHashMap<Pair<ReaderPage, ReaderPage?>, PagerPreparedPage>(8, 0.75f, true)
 

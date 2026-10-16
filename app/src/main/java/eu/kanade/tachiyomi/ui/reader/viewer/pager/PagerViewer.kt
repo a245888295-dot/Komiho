@@ -67,7 +67,12 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     // SY（A+B，Page 流畅度优化）：预处理结果缓存 + 相邻页预热。
     // 借鉴 webtoon「解码好了等你滑」：翻页选定后，后台提前把相邻页的
     // stream 物化/处理/增强预解码做完，holder 实例化时直接命中缓存。
-    val preparedCache = PagerPreparedCache()
+    // DSH: 容量跟「预加载页数」走，但**收在 2..4** —— 3x 模型一份预处理位图约 100MB，
+    // 用户填 8 也只是白占内存（缓存是 LRU，超出容量的预热算完就被淘汰）。
+    // ⚠️ 用 lazy：偏好要等 Injekt 就绪，属性初始化顺序早于它（readerPrefs 声明在文件后段）。
+    val preparedCache: PagerPreparedCache by lazy {
+        PagerPreparedCache(maxSize = readerPrefs.aiPreloadPages.get().coerceIn(2, 4))
+    }
 
     /** 预热串行锁：避免前后两页同时跑 Lanczos 预解码打满 CPU（教训同 offscreen 调高）。 */
     private val prewarmMutex = kotlinx.coroutines.sync.Mutex()
@@ -382,8 +387,16 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             }
         }
 
+        // DSH (2026-10-16): 预加载页数 —— 对齐 komikku_img_upscale 的 1/2/3/5/8（默认 3）。
+        // 以前分页模式写死只预热 1 页，所以每翻一页都要干等一次推理（3x 约 1.5s）；
+        // 现在按用户设置串行预热 N 页，深度再被 preparedCache.capacity 收口（见其构造处）。
+        val preloadDepth = if (enhancementOn) {
+            minOf(readerPrefs.aiPreloadPages.get(), preparedCache.capacity)
+        } else {
+            1
+        }
         val positions = if (enhancementOn) {
-            listOf(if (forward) pager.currentItem + 1 else pager.currentItem - 1)
+            (1..preloadDepth).map { if (forward) pager.currentItem + it else pager.currentItem - it }
         } else {
             listOf(pager.currentItem + 1, pager.currentItem - 1)
         }

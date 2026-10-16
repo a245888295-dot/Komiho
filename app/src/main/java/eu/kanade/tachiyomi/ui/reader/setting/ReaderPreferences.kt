@@ -326,6 +326,19 @@ class ReaderPreferences(
      */
     val aiAreaDownscaleStrength: Preference<Int> = preferenceStore.getInt("pref_ai_area_downscale_strength", 100)
 
+    // DSH (2026-10-16): 对齐 komikku_img_upscale 的三个设置。
+    // 语义完全照它：**0 = 不限制**。变更进 [enhancementCacheKey]（影响成像）。
+    /** 最大处理分辨率（宽 / 高，0 = 不限）：解码后等比缩到该范围内再喂 AI。输出 = min(源长边,上限) × 倍率。 */
+    val aiMaxProcessWidth: Preference<Int> = preferenceStore.getInt("pref_ai_max_process_w", 1600)
+    val aiMaxProcessHeight: Preference<Int> = preferenceStore.getInt("pref_ai_max_process_h", 1600)
+
+    /** 最大分辨率（宽 / 高，0 = 不限）：超过就跳过增强、原图直出（等价 komikku 的 skip 门）。 */
+    val aiSkipMaxWidth: Preference<Int> = preferenceStore.getInt("pref_ai_skip_max_w", 0)
+    val aiSkipMaxHeight: Preference<Int> = preferenceStore.getInt("pref_ai_skip_max_h", 0)
+
+    /** 预加载页数（分页模式的预热深度；档位对齐 komikku 的 1/2/3/5/8，默认 3）。 */
+    val aiPreloadPages: Preference<Int> = preferenceStore.getInt("pref_ai_preload_pages", 3)
+
     // Komiho (2026-10-03): 每个增强方式各自的「最后一次选择」。
     // 一级列表在**非当前方式**的行上也显示它们（此前只显示占位符「—」），这样「切回去会得到
     // 什么」一眼可见。三者与 enhancementMode / aiModelId 相互独立 —— 切换方式不会抹掉别的
@@ -380,6 +393,9 @@ class ReaderPreferences(
         append(enhancementMode.get())
         append('|').append(lanczosScale.get())
         append('|').append(aiModelId.get())
+        // DSH: 处理上限直接影响输出像素 → 必须进指纹，否则改完仍吃旧缓存
+        append('|').append(aiMaxProcessWidth.get()).append('x').append(aiMaxProcessHeight.get())
+        append('|').append(aiSkipMaxWidth.get()).append('x').append(aiSkipMaxHeight.get())
         append('|').append(aiTileSize.get())
         append('|').append(denoiseLevel.get())
         append('|').append(if (aiBypassFitGate.get()) 1 else 0)
@@ -601,6 +617,11 @@ class ReaderPreferences(
         )
 
         val WebtoonTapScrollFractions = floatArrayOf(0.5f, 0.75f, 1.0f)
+
+        // DSH: 「最大处理分辨率 / 最大分辨率 / 预加载页数」的档位（0 = 不限制）。
+        val AiMaxProcessOptions = listOf(0, 1280, 1600, 2048, 2560)
+        val AiSkipMaxOptions = listOf(0, 2048, 2560, 3072, 4096)
+        val AiPreloadPageOptions = listOf(1, 2, 3, 5, 8)
 
         // Komiho: webtoon 预取深度档位（倍数）。1 = 当前原版行为，上限 3。
         const val WEBTOON_PREFETCH_DEPTH_MIN = 1

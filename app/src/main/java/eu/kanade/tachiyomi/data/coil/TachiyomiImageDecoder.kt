@@ -114,15 +114,29 @@ class TachiyomiImageDecoder(private val resources: ImageSource, private val opti
         // AI 2x 结果默认直接交 SSIV 缩放显示；aiAreaDownscale 开启时在增强后按视图尺寸
         // 面积回缩（见下方 areaDownscaleToDisplay 调用）。
         val preferences = Injekt.get<ReaderPreferences>()
+        // DSH (2026-10-16): 「最大处理分辨率」（0 = 不限）—— 语义对齐 komikku_img_upscale 的
+        // realCuganMaxSizeWidth/Height：解码后等比缩到这个范围内再喂 AI。
+        // 输出尺寸 = min(源长边, 上限) × 倍率，直接决定内存与单页耗时。
+        // 两个框取更紧的一边做统一上限（等价它的 min(widthRatio, heightRatio) 等比缩）。
+        val maxProcW = preferences.aiMaxProcessWidth.get()
+        val maxProcH = preferences.aiMaxProcessHeight.get()
+        val processCap = listOf(maxProcW, maxProcH).filter { it > 0 }.minOrNull()
         val (targetW, targetH) = if (options.enhanced) {
             if (isTallStrip) {
                 // 采样高度仍用 srcHeight（高度不约束解码；负数不能流进 calculateInSampleSize
                 // —— coil3 DecodeUtils 对它的语义未知）。
-                (if (preferences.aiBypassFitGate.get()) MAX_ENHANCE_SOURCE_DIMENSION else enhanceTarget(dstWidth)) to srcHeight
-            } else if (preferences.aiBypassFitGate.get()) {
-                MAX_ENHANCE_SOURCE_DIMENSION to MAX_ENHANCE_SOURCE_DIMENSION
+                when {
+                    processCap != null -> processCap to srcHeight
+                    preferences.aiBypassFitGate.get() -> MAX_ENHANCE_SOURCE_DIMENSION to srcHeight
+                    else -> enhanceTarget(dstWidth) to srcHeight
+                }
             } else {
-                enhanceTarget(dstWidth) to enhanceTarget(dstHeight)
+                when {
+                    processCap != null -> processCap to processCap
+                    preferences.aiBypassFitGate.get() ->
+                        MAX_ENHANCE_SOURCE_DIMENSION to MAX_ENHANCE_SOURCE_DIMENSION
+                    else -> enhanceTarget(dstWidth) to enhanceTarget(dstHeight)
+                }
             }
         } else {
             dstWidth to dstHeight
@@ -157,11 +171,20 @@ class TachiyomiImageDecoder(private val resources: ImageSource, private val opti
                 dstHeight / bitmap.height.toFloat(),
             )
         }
-        val skipAi = options.enhanced &&
-            preferences.enhancementMode.get() == 5 &&
+        // DSH: 「最大分辨率」（0 = 不限）—— 超过就直接跳过增强、原图直出，等价 komikku 的
+        // realCuganSkipMaxSizeWidth/Height。勾了「高分辨率图强制增强」时这两个门失效。
+        val skipMaxW = preferences.aiSkipMaxWidth.get()
+        val skipMaxH = preferences.aiSkipMaxHeight.get()
+        val exceedsSkipLimit = options.enhanced &&
             !preferences.aiBypassFitGate.get() &&
-            !bitmap.isRecycled &&
-            fitRatio <= 1f
+            ((skipMaxW > 0 && srcWidth > skipMaxW) || (skipMaxH > 0 && srcHeight > skipMaxH))
+        val skipAi = exceedsSkipLimit || (
+            options.enhanced &&
+                preferences.enhancementMode.get() == 5 &&
+                !preferences.aiBypassFitGate.get() &&
+                !bitmap.isRecycled &&
+                fitRatio <= 1f
+            )
 
         // Komiho: 把「长边 ≤ MAX_ENHANCE_SOURCE_DIMENSION」这个意图真正落实。
         // 采样率只能取 2 的幂，所以实际解出的图可能比目标大最多一倍：源 5780×4096、
@@ -204,7 +227,11 @@ class TachiyomiImageDecoder(private val resources: ImageSource, private val opti
                         // DSH: 带上原因 —— 此门是「源图已够清晰，放大无意义」。
                         EnhanceTimings.markSkipped(
                             options.pageIndex,
-                            EnhanceTimings.SkipReason.ALREADY_SHARP,
+                            if (exceedsSkipLimit) {
+                                EnhanceTimings.SkipReason.SKIP_MAX_SIZE
+                            } else {
+                                EnhanceTimings.SkipReason.ALREADY_SHARP
+                            },
                         )
                     } else {
                         // Komiho 诊断：来源标识 = 谁发起的 + 第几页。
