@@ -70,6 +70,27 @@
    "scale": 2,
    "padding": 18,
    "label": "Real-CUGAN Pro 保守降噪 (FP16)"
+  },
+  {
+   "id": "qnn-realcugan-pro-x3-no-denoise-int8",
+   "stem": "realcugan-pro-x3-no-denoise-int8",
+   "scale": 3,
+   "padding": 18,
+   "label": "Real-CUGAN Pro x3 无降噪 (INT8)"
+  },
+  {
+   "id": "qnn-realcugan-pro-x2-no-denoise-int8",
+   "stem": "realcugan-pro-x2-no-denoise-int8",
+   "scale": 2,
+   "padding": 18,
+   "label": "Real-CUGAN Pro x2 无降噪 (INT8)"
+  },
+  {
+   "id": "qnn-realcugan-pro-x3-denoise3x-int8",
+   "stem": "realcugan-pro-x3-denoise3x-int8",
+   "scale": 3,
+   "padding": 18,
+   "label": "Real-CUGAN Pro x3 Denoise3x (INT8)"
   }
  ]
 }
