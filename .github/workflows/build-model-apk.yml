@@ -146,17 +146,27 @@ jobs:
       - name: Grant gradlew execute permission
         run: chmod +x gradlew
 
-      - name: Decode release keystore
+      - name: Restore host signing keystore (read-only)
         # MUST be the same keystore as the host app: NpuModelPluginScanner rejects model
         # packages whose signing certificate does not match the host's.
+        # 复用 host(build.yml) 的 cache key,并且**只用 restore、不 save** —— 本工作流绝不
+        # 生成新 key:一旦 key 变了,主程序签名跟着变,用户侧就必须卸载重装(数据全清)。
+        uses: actions/cache/restore@v6
+        with:
+          path: keystore
+          key: komiho-signing-keystore-v1
+
+      - name: Verify host keystore is present
         run: |
-          mkdir -p keystore
-          echo "${{ secrets.KOMIHO_RELEASE_KEYSTORE_BASE64 }}" | base64 -d > keystore/komiho-release.jks
+          if [ ! -s keystore/komiho-release.jks ]; then
+            echo "::error::没有取到 host 的 keystore(缓存可能被淘汰)。请先跑一次 'Build Komiho V2 APK'(它会在 cache 里生成并固定 keystore),再跑本工作流。"
+            exit 1
+          fi
           ls -la keystore/
 
       - name: Build model package APK
         env:
-          KOMIHO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD }}
+          KOMIHO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD != '' && secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD || 'komihorelease123' }}
           MODEL_VERSION_CODE: ${{ inputs.model_version_code }}
         run: |
           # versionCode is what the installer compares against the installed package;
@@ -179,7 +189,7 @@ jobs:
         # module no matter what the DSL says. The package is hasCode=false, so the dex is
         # dead weight: delete it, re-align, re-sign with the host keystore.
         env:
-          KOMIHO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD }}
+          KOMIHO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD != '' && secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD || 'komihorelease123' }}
         run: |
           APK=modelapk/build/outputs/apk/release/modelapk-release.apk
           BT="$ANDROID_HOME/build-tools/36.0.0"
