@@ -188,6 +188,9 @@ class PagerPageHolder(
         if (page?.skipEnhance == true) return
         val preferences = Injekt.get<ReaderPreferences>()
         if (preferences.enhancementMode.get() == 0 && preferences.denoiseLevel.get() == 0) return
+        // DSH: CPU 重采样档位(2=Lanczos3 / 3=Catmull-Rom)本来就是 CPU 处理,补算没有意义。
+        val mode = preferences.enhancementMode.get()
+        if (mode == 2 || mode == 3) return
         if (!viewer.isCurrentItem(item)) return
 
         // 最多补算 2 次，避免硬件彻底坏掉时死循环
@@ -213,6 +216,10 @@ class PagerPageHolder(
      */
     override fun onPageSelected(forward: Boolean) {
         super.onPageSelected(forward)
+        // DSH 修复: 页面重新成为当前页时重置补算次数,给它一轮新的机会。
+        // 否则某页两次补算都失败后会永久停在 CPU 超分(用户反馈「CPU 超分不会刷新」,
+        // 而 skip 页不走这条计数所以能刷新)。只有翻页才重置,停留不动不会重复触发。
+        reEnhanceAttempts = 0
         maybeReEnhance("settle")
     }
 
