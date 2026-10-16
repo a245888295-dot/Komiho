@@ -35,6 +35,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.waifu2x.AiUpscaleModel
 import eu.kanade.tachiyomi.util.waifu2x.PluginUpscaleModel
+import eu.kanade.tachiyomi.util.waifu2x.AiModelAxes
 import eu.kanade.tachiyomi.util.waifu2x.UpscaleModelRegistry
 import eu.kanade.tachiyomi.util.waifu2x.UpscaleModelSpec
 import eu.kanade.tachiyomi.util.waifu2x.Waifu2x
@@ -473,14 +474,107 @@ private fun NpuDetail(
                 ),
         )
     } else {
-        npuSeriesGroups(compatible).forEach { (series, members) ->
-            NpuSeriesChips(
-                series = series,
-                members = members,
-                activeModel = activeModel,
-                onSelect = { model -> setEnhancementModel(preferences, model) },
-            )
+        // DSH (2026-10-16): 改成 komikku_img_upscale 的四轴（模型族 / 降噪等级 / 倍率 / 精度）。
+        // 每个轴只列**包内真实存在**的取值；组合不成立时由 AiModelAxes.resolve 回退到同族最近的
+        // 变体并把轴纠正过来（等价它 ColorFilterPage 里的 LaunchedEffect 校验）。
+        val family by preferences.aiFamily.collectAsState()
+        val noise by preferences.aiNoiseLevel.collectAsState()
+        val scale by preferences.aiScale.collectAsState()
+        val precision by preferences.aiPrecision.collectAsState()
+
+        LaunchedEffect(compatible, family, noise, scale, precision) {
+            val match = AiModelAxes.resolve(
+                models = compatible,
+                want = AiModelAxes.Axes(family, noise, precision),
+                wantScale = scale,
+            ) ?: return@LaunchedEffect
+            if (preferences.aiModelId.get() != match.model.id) {
+                // 与 setEnhancementModel 同样的收口，但**不切档位** —— 只是进详情页看一眼
+                // 不该把增强方式改成 NPU。插件模型一定是 QNN_HTP，所以按 NPU 记忆。
+                preferences.aiModelId.set(match.model.id)
+                preferences.enhancementLastNpuModelId.set(match.model.id)
+            }
+            if (preferences.aiFamily.get() != match.axes.family) preferences.aiFamily.set(match.axes.family)
+            if (preferences.aiNoiseLevel.get() != match.axes.noise) preferences.aiNoiseLevel.set(match.axes.noise)
+            if (preferences.aiPrecision.get() != match.axes.precision) preferences.aiPrecision.set(match.axes.precision)
+            if (preferences.aiScale.get() != match.model.scale) preferences.aiScale.set(match.model.scale)
         }
+
+        EnhancementParamLabel("模型")
+        SettingsChipRow {
+            AiModelAxes.families(compatible).forEach { candidate ->
+                FilterChip(
+                    selected = candidate == family,
+                    onClick = { preferences.aiFamily.set(candidate) },
+                    label = { Text(AiModelAxes.familyLabel(candidate)) },
+                )
+            }
+        }
+
+        if (AiModelAxes.hasNoiseAxis(family)) {
+            val noises = AiModelAxes.noisesOf(compatible, family, scale)
+            if (noises.size > 1) {
+                EnhancementParamLabel("降噪等级")
+                SettingsChipRow {
+                    noises.forEach { candidate ->
+                        FilterChip(
+                            selected = candidate == noise,
+                            onClick = { preferences.aiNoiseLevel.set(candidate) },
+                            label = { Text(AiModelAxes.noiseLabel(candidate)) },
+                        )
+                    }
+                }
+            } else if (noises.size == 1) {
+                EnhancementParamLabel("降噪等级")
+                SettingsChipRow {
+                    FilterChip(
+                        selected = true,
+                        onClick = { },
+                        label = { Text(AiModelAxes.noiseLabel(noises.first())) },
+                    )
+                }
+            }
+        }
+
+        val scales = AiModelAxes.scalesOf(compatible, family)
+        if (scales.size > 1) {
+            EnhancementParamLabel("放大倍数")
+            SettingsChipRow {
+                scales.forEach { candidate ->
+                    FilterChip(
+                        selected = candidate == scale,
+                        onClick = { preferences.aiScale.set(candidate) },
+                        label = { Text("${candidate}x") },
+                    )
+                }
+            }
+        }
+
+        val precisions = AiModelAxes.precisionsOf(compatible, family, scale, noise)
+        if (precisions.size > 1) {
+            EnhancementParamLabel("精度")
+            SettingsChipRow {
+                precisions.forEach { candidate ->
+                    FilterChip(
+                        selected = candidate == precision,
+                        onClick = { preferences.aiPrecision.set(candidate) },
+                        label = { Text(AiModelAxes.precisionLabel(candidate)) },
+                    )
+                }
+            }
+        }
+
+        EnhancementParamLabel("当前生效")
+        Text(
+            text = activeModel.labelText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(
+                start = SettingsItemsPaddings.Horizontal,
+                end = SettingsItemsPaddings.Horizontal,
+                bottom = 4.dp,
+            ),
+        )
     }
 
     EnhancementParamLabel(MR.strings.enhancement_detail_advanced)

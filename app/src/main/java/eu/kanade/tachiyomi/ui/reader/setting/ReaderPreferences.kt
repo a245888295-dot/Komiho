@@ -339,6 +339,14 @@ class ReaderPreferences(
     /** 预加载页数（分页模式的预热深度；档位对齐 komikku 的 1/2/3/5/8，默认 3）。 */
     val aiPreloadPages: Preference<Int> = preferenceStore.getInt("pref_ai_preload_pages", 3)
 
+    // DSH: 模型四轴（对齐 komikku 的 模型 / 降噪等级 / 放大倍数 / 精度）。
+    // 真正的模型 id 仍写在 [aiModelId]（由 AiModelAxes 解析后回写），增强链路只认它。
+    // 下标与 komikku 一致：降噪 0=无 1=1x 2=2x 3=3x 4=保守；精度 0=FP16 2=INT8。
+    val aiFamily: Preference<String> = preferenceStore.getString("pref_ai_family", "realcugan-pro")
+    val aiNoiseLevel: Preference<Int> = preferenceStore.getInt("pref_ai_noise_level", 3)
+    val aiScale: Preference<Int> = preferenceStore.getInt("pref_ai_scale", 3)
+    val aiPrecision: Preference<Int> = preferenceStore.getInt("pref_ai_precision", 2)
+
     // Komiho (2026-10-03): 每个增强方式各自的「最后一次选择」。
     // 一级列表在**非当前方式**的行上也显示它们（此前只显示占位符「—」），这样「切回去会得到
     // 什么」一眼可见。三者与 enhancementMode / aiModelId 相互独立 —— 切换方式不会抹掉别的
