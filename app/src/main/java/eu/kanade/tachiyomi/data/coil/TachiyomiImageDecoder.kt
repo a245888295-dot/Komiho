@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.util.MihonSyEnhancer
 import eu.kanade.tachiyomi.util.eink.EinkGray
 import eu.kanade.tachiyomi.util.storage.CbzCrypto
 import eu.kanade.tachiyomi.util.storage.CbzCrypto.getCoverStream
+import eu.kanade.tachiyomi.util.waifu2x.Waifu2x
 import mihon.core.common.archive.archiveReader
 import okio.BufferedSource
 import tachiyomi.core.common.util.system.ImageUtil
@@ -249,7 +250,13 @@ class TachiyomiImageDecoder(private val resources: ImageSource, private val opti
                                 enhanced = downscaled
                             }
                         }
-                        if (enhanceOk) {
+                        // DSH 修复「CPU 超分不刷新」: CPU 兜底(引擎 NONE)不算「真增强」。
+                        // 原实现只看 enhanceOk,而 CPU Lanczos 兜底返回的也是新位图 -> enhanceOk=true,
+                        // 该页于是登记了耗时 -> PagerPreparedPage.enhanced=true /
+                        // currentImageEnhanced=true -> holder 的补算闸门永久关闭,再也回不到 NPU。
+                        // 现在按引擎类型区分:只有真正由 NPU/GPU 出图的页才登记耗时。
+                        val engineUsed = Waifu2x.engineFor(options.pageIndex)
+                        if (enhanceOk && engineUsed != Waifu2x.EngineKind.NONE) {
                             EnhanceTimings.put(
                                 options.pageIndex,
                                 (android.os.SystemClock.uptimeMillis() - decodeStart) -
