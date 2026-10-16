@@ -253,6 +253,73 @@ open class ReaderPageImageView @JvmOverloads constructor(
      */
     private var enhanceStatusView: TextView? = null
 
+    /**
+     * DSH: 增强遮罩 —— 未超分完成前盖住画面。
+     *
+     * 用户诉求: 宁可暂时黑屏/模糊等待，也不要先看到未超分的糊图，
+     * 更不要看到「跳过」后还得手动翻页才刷新。增强期间直接给「增强中…」占位。
+     */
+    private var enhanceMaskView: View? = null
+
+    private fun ensureEnhanceMaskView(): View {
+        enhanceMaskView?.let { return it }
+        val container = android.widget.FrameLayout(context).apply {
+            setBackgroundColor(0xE6000000.toInt()) // 近乎不透明的黑，盖住下方的原图
+            visibility = View.GONE
+        }
+        val tv = TextView(context).apply {
+            text = "增强中…"
+            textSize = 15f
+            setTextColor(0xFFFFFFFF.toInt())
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        container.addView(
+            tv,
+            android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER,
+            ),
+        )
+        addView(
+            container,
+            LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        enhanceMaskView = container
+        return container
+    }
+
+    /**
+     * 增强进行中：角标显示「增强中…」，并在 AI 档下用遮罩盖住画面。
+     * 由 [setImage] 在真正发起增强请求前调用。
+     */
+    internal fun showEnhancementPending() {
+        val preferences = Injekt.get<ReaderPreferences>()
+        if (preferences.enhancementMode.get() == 0) return
+        // AI 档才遮罩：CPU 重采样档位本身就是 CPU 处理，遮了没意义。
+        if (preferences.enhancementMode.get() == 5) {
+            ensureEnhanceMaskView().visibility = View.VISIBLE
+        }
+        if (preferences.showEnhancementStatus.get()) {
+            val tv = ensureEnhanceStatusView()
+            tv.text = "增强中…"
+            tv.visibility = View.VISIBLE
+        }
+    }
+
+    private fun updateEnhanceMask(enhanced: Boolean) {
+        val mask = enhanceMaskView ?: return
+        val preferences = Injekt.get<ReaderPreferences>()
+        if (preferences.enhancementMode.get() != 5) {
+            mask.visibility = View.GONE
+            return
+        }
+        mask.visibility = if (enhanced) View.GONE else View.VISIBLE
+    }
+
     private fun ensureEnhanceStatusView(): TextView {
         enhanceStatusView?.let { return it }
         val tv = TextView(context).apply {
@@ -306,6 +373,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
         failLabel: String? = null,
     ) {
         val preferences = Injekt.get<ReaderPreferences>()
+        // DSH: 无论状态角标开关如何，遮罩都要跟着增强结果走 —— 没增强成功就继续盖着，
+        // 避免用户看到未超分的画面并误以为「就这样了」。
+        updateEnhanceMask(success)
         if (preferences.enhancementMode.get() == 0 || !preferences.showEnhancementStatus.get()) return
         val tv = ensureEnhanceStatusView()
         tv.text = if (success) {
@@ -584,6 +654,11 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     .cropBordersAggressive(config.cropBordersAggressive)
                     .crossfade(false)
                     .build()
+                    .also {
+                        // DSH: 真正发起增强前就给「增强中…」提示 + 遮罩，
+                        // 覆盖黑屏/原图两种状态，直到超分完毕显示 NPU OK。
+                        showEnhancementPending()
+                    }
                     .let(context.imageLoader::enqueue)
             }
             else -> {
