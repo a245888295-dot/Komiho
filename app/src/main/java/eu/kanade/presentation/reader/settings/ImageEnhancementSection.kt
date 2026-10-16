@@ -566,7 +566,8 @@ private fun NpuDetail(
 
         EnhancementParamLabel("当前生效")
         Text(
-            text = activeModel.labelText,
+            // labelText 是 String?（内置模型走 i18n 资源），插件模型一定带 manifest label
+            text = activeModel.labelText ?: activeModel.id,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(
