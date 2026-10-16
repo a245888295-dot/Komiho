@@ -606,6 +606,22 @@ object MihonSyEnhancer {
             logcat(LogPriority.WARN) { "AI upscale unavailable for this ABI; falling back to Lanczos3" }
         }
 
+        // DSH: 用户明确选择的是 NPU/AI 超分，不接受程序自作主张降级到 CPU Lanczos。
+        // AI 档（mode 5）下引擎没出结果时不再做 CPU 兜底，而是返回 null（保持原始解码图），
+        // 交由 PagerPageHolder 的停顿补算重新尝试 NPU。
+        // 理由: CPU Lanczos 的「超分」几乎无实际效果，却会被当成「本页已增强」把重试闸门关死，
+        // 结果是这一页永远停留在低画质。宁可慢一点重试，也不要一次错误的兜底。
+        // 注意: mode 2/3 (Lanczos3 / Catmull-Rom) 是用户显式选择的 CPU 重采样档位，不在此列。
+        if (mode == 5) {
+            // 清掉本页引擎记录，角标据此显示「重试」而不是沿用上一页的 NPU/GPU 结果。
+            Waifu2x.markCpuFallback(pageIndex)
+            logcat(LogPriority.DEBUG) {
+                "AI upscale produced no result; keeping original decode and retrying on settle " +
+                    "(CPU fallback disabled by design for AI mode)"
+            }
+            return null
+        }
+
         // Komiho: 落到这里 = GPU/NPU 引擎都没出结果，本页由 CPU 重采样完成。
         // 角标据此显示 CPU OK（引擎选择失败时 lastEngine 保持上一次的值，所以必须在
         // 真正走 CPU 路径时清掉，否则会把上一页的 GPU/NPU 结果错误地沿用过来）。
