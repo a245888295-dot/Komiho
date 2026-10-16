@@ -304,7 +304,10 @@ class ReaderPreferences(
      * MP 输出门（MihonSyEnhancer.MAX_ENHANCE_OUTPUT_PIXELS = 36MP；AI 固定 2x，即输入面积
      * >9MP 照样 skip）始终生效。变更进 [enhancementCacheKey] 指纹。
      */
-    val aiBypassFitGate: Preference<Boolean> = preferenceStore.getBoolean("pref_ai_bypass_fit_gate", false)
+    // DSH: 默认改为 true —— 用户要求「NPU 超分一视同仁，大图也必须超」。
+    // 开启后同时绕过源尺寸门与输出面积门(见 MihonSyEnhancer.bypassCapGate)。
+    // 已有用户的既有设置不受影响(SharedPreferences 里已有值优先)。
+    val aiBypassFitGate: Preference<Boolean> = preferenceStore.getBoolean("pref_ai_bypass_fit_gate", true)
 
     /**
      * Komiho (2026-09-30): AI 面积回缩（防摩尔纹）。**默认关 —— 真机 A/B 后再定默认。**

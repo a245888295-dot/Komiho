@@ -262,7 +262,12 @@ object MihonSyEnhancer {
         // 不但白烧算力（实测单页 2.5~6s，串行排队时单页总耗可达 15s），最后那次非整数重采样
         // 还会抹细节：实测 1600×20164 → AI 2x = 3200×40328 (129MP) → 缩到 1593×20082，
         // **比源宽 1600 还窄**。这类输入（本地已超分好的大图正是典型）直接不增强。
-        if (mode != 0 && exceedsOutputCap(input, mode, preferences)) {
+        // DSH: 「大图也强制 AI 增强」(aiBypassFitGate) 现在同时绕过输出面积门。
+        // 用户要求「一视同仁，所有页都必须走 AI」—— 开启该开关后不再有「跳过·图过大」。
+        // 代价: 超大图会先 2x 再被 capOutputSize 缩回 36MP，单页耗时可观；这是用户的显式选择。
+        // (源尺寸门早已由同一开关绕过，见 TachiyomiImageDecoder 的 MAX_ENHANCE_SOURCE_DIMENSION。)
+        val bypassCapGate = preferences.aiBypassFitGate.get()
+        if (!bypassCapGate && mode != 0 && exceedsOutputCap(input, mode, preferences)) {
             logcat(LogPriority.WARN) {
                 val inPx = input.width.toLong() * input.height.toLong()
                 val scale = scaleFor(mode, preferences)
@@ -612,7 +617,8 @@ object MihonSyEnhancer {
         // 理由: CPU Lanczos 的「超分」几乎无实际效果，却会被当成「本页已增强」把重试闸门关死，
         // 结果是这一页永远停留在低画质。宁可慢一点重试，也不要一次错误的兜底。
         // 注意: mode 2/3 (Lanczos3 / Catmull-Rom) 是用户显式选择的 CPU 重采样档位，不在此列。
-        if (mode == 5) {
+        // 注意: 这里在 enhanceWithGpu 内，没有主函数的 `mode` 变量，必须重新求值。
+        if (effectiveMode(preferences) == 5) {
             // 清掉本页引擎记录，角标据此显示「重试」而不是沿用上一页的 NPU/GPU 结果。
             Waifu2x.markCpuFallback(pageIndex)
             logcat(LogPriority.DEBUG) {
