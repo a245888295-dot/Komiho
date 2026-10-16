@@ -132,6 +132,9 @@ class PagerPageHolder(
     /** 迟到补算延迟（ms）：等预热抢占的 abort 发生、被打断的解码出图后再判一次。 */
     private val reEnhanceDelayMs = 400L
 
+    /** Komiho 修复：限制最大补算重试次数，防止硬件持续失败时陷入无限重试风暴 */
+    private var reEnhanceAttempts = 0
+
     private val pendingReEnhance = Runnable { maybeReEnhance("late") }
 
     init {
@@ -157,10 +160,12 @@ class PagerPageHolder(
         reEnhanceInFlight = false
         if (enhanced) {
             appliedSource = null
+            reEnhanceAttempts = 0 // 成功增强后重置重试计数
             removeCallbacks(pendingReEnhance)
             return
         }
-        if (aborted && viewer.isCurrentItem(item)) {
+        // 放宽条件：只要当前页面可见且未成功增强，就安排迟到补算（覆盖 QNN 失败与抢占打断）
+        if (viewer.isCurrentItem(item)) {
             removeCallbacks(pendingReEnhance)
             postDelayed(pendingReEnhance, reEnhanceDelayMs)
         }
@@ -173,8 +178,6 @@ class PagerPageHolder(
      *
      * 闸门（缺一不可）：
      * - 增强开着（mode != 0 或降噪开着）、非动图、非 skipEnhance 页；
-     * - [Waifu2x.wasAborted] 为真——原生只对**真被 abort 过**的页登记，尺寸门 /
-     *   HARDWARE / 引擎失败等永不误触发；补算成功后该记录被下次推理清除，天然防循环；
      * - 仍是当前页（快速翻页时只为停下的那一页补算，不形成重试风暴）；
      * - 没有已在飞的补算。
      */
@@ -185,8 +188,12 @@ class PagerPageHolder(
         if (page?.skipEnhance == true) return
         val preferences = Injekt.get<ReaderPreferences>()
         if (preferences.enhancementMode.get() == 0 && preferences.denoiseLevel.get() == 0) return
-        if (!Waifu2x.wasAborted(page.index)) return
         if (!viewer.isCurrentItem(item)) return
+
+        // 最多补算 2 次，避免硬件彻底坏掉时死循环
+        if (reEnhanceAttempts >= 2) return
+        reEnhanceAttempts++
+
         reEnhanceInFlight = true
         // 作废预处理缓存里那份未增强位图 + 放行 already-rendered 守卫：否则回翻再命中
         // 还是原图，状态重发也被守卫挡掉。缓存删除后本 holder 持有的源是唯一引用。
@@ -373,7 +380,13 @@ class PagerPageHolder(
                 }
             }
             val result = prepared ?: return@withLock
-            viewer.preparedCache.put(key, result)
+            
+            // 核心修复：只有真正成功增强的结果才允许进入缓存；未增强或降级结果必须主动移出缓存，防范回看死锁
+            if (result.enhanced) {
+                viewer.preparedCache.put(key, result)
+            } else {
+                viewer.preparedCache.remove(key)
+            }
 
             withUIContext {
                 val bitmap = result.decodedBitmap
