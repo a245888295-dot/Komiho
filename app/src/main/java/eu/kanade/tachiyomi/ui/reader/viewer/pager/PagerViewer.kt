@@ -613,6 +613,13 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             adapter.refresh()
             pager.adapter = adapter
             pager.setCurrentItem(currentItem, false)
+            // DSH: 重建之后把「当前这一页」再驱动一遍 —— 用户实测：在阅读器里关掉超分再打开，
+            // 当下那一页既不重新增强、也不再显示角标（其它页因为翻到时会新建 holder 所以正常）。
+            // 只处理仍然挂着的 holder，其余交给新 holder 自己渲染。
+            (pager.getChildAt(0) as? androidx.recyclerview.widget.RecyclerView)
+                ?.findViewHolderForAdapterPosition(currentItem)
+                ?.let { it as? PagerPageHolder }
+                ?.rerenderAfterImageSettingsChange()
         }
     }
 

@@ -357,6 +357,13 @@ class ReaderPreferences(
     val showEnhancementStatus: Preference<Boolean> = preferenceStore.getBoolean("pref_show_enhancement_status", false)
 
     /**
+     * DSH: 增强角标是否展开。默认折叠 —— 折叠时只显示 `AI` / `AI…` / `AI!` 这一小块，
+     * 点一下角标展开成 `NPU OK 1.2s 2160×3240`，再点一下收回去（不影响画面）。
+     */
+    val enhancementBadgeExpanded: Preference<Boolean> =
+        preferenceStore.getBoolean("pref_enhancement_badge_expanded", false)
+
+    /**
      * Komiho (2026-09-19): fingerprint of every preference that changes the **rendered result**
      * of enhancement.
      *

@@ -254,6 +254,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
     private var enhanceStatusView: TextView? = null
 
     /**
+     * DSH: 角标当前的**完整**文案（折叠态显示的是它的精简版）。
+     * 点角标折叠/展开时不用重算状态，直接按这个字符串重画。
+     */
+    private var lastBadgeFullText: String? = null
+
+    /**
      * DSH (2026-10-16 重做): 「增强中…」的语义 —— 填住「请求增强 → NPU 真出图」这一段空白。
      *
      * 上一版的错在挂载点：提示挂在 Coil 入队那一刻，而真正耗时的 NPU 计算发生在**入队之前**
@@ -266,11 +272,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
      * [showEnhancementOutcome] 才换成 `NPU OK 耗时 尺寸`，其余情况一律继续显示「增强中…」。
      */
     internal fun showEnhancementPending() {
-        if (skipEnhance || !enhancementStatusEnabled()) return
-        val tv = ensureEnhanceStatusView()
-        tv.text = "增强中…"
-        tv.visibility = View.VISIBLE
-        tv.bringToFront()
+        applyEnhancementBadge("增强中…")
     }
 
     /** 页面根本没走增强（用户对单页关掉增强 / 关闭增强档位）时不留痕迹。 */
@@ -284,11 +286,58 @@ open class ReaderPageImageView @JvmOverloads constructor(
      * 正常情况极少出现（用户实测约一百页遇不到一次）。
      */
     internal fun showEnhancementFailed() {
-        if (skipEnhance || !enhancementStatusEnabled()) return
+        applyEnhancementBadge("增强失败")
+    }
+
+    /**
+     * DSH: 角标只有这一个写入口 —— 统一处理「折叠/展开」「增强关掉时不留残影」「压在最上层」。
+     *
+     * 折叠态(默认)只显示一小块 `AI` / `AI…` / `AI!`，点一下角标展开成完整文案
+     * (`NPU OK 1.2s 2160×3240`)，再点一下收回去；状态存在 [ReaderPreferences.enhancementBadgeExpanded]。
+     */
+    private fun applyEnhancementBadge(full: String) {
+        lastBadgeFullText = full
+        if (skipEnhance || !enhancementStatusEnabled()) {
+            // 增强被关掉：把旧文案收干净，别留一个骗人的「NPU OK」在那
+            hideEnhancementStatus()
+            return
+        }
         val tv = ensureEnhanceStatusView()
-        tv.text = "增强失败"
+        tv.text = if (Injekt.get<ReaderPreferences>().enhancementBadgeExpanded.get()) full else compactBadgeText(full)
         tv.visibility = View.VISIBLE
         tv.bringToFront()
+    }
+
+    /** 折叠态文案：只说「哪个引擎 / 在跑 / 失败」，不占画面。 */
+    private fun compactBadgeText(full: String): String = when {
+        full == "增强中…" -> "AI…"
+        full == "增强失败" -> "AI!"
+        Injekt.get<ReaderPreferences>().enhancementMode.get() == 5 -> "AI"
+        else -> "CPU"
+    }
+
+    /** 点角标 = 折叠/展开切换（设置持久化，下一页也照这个来）。 */
+    private fun toggleEnhancementBadge() {
+        val preferences = Injekt.get<ReaderPreferences>()
+        preferences.enhancementBadgeExpanded.set(!preferences.enhancementBadgeExpanded.get())
+        lastBadgeFullText?.let { applyEnhancementBadge(it) }
+    }
+
+    /**
+     * DSH: 角标自愈 —— 用户在阅读器里改了增强设置（或关了又打开）之后，
+     * 这一页可能既不重新渲染、也不再重发状态，角标就空着/停旧文案（用户实测「刚关超分那一页」）。
+     * 由 holder 在挂载、翻页停顿、设置变更后调用，按**当前**设置重算一次。
+     */
+    internal fun refreshEnhancementBadgeState(enhanced: Boolean) {
+        if (skipEnhance || !enhancementStatusEnabled()) {
+            hideEnhancementStatus()
+            return
+        }
+        if (enhanced) {
+            // 这页确实增强过：保留现有文案（没有文案就不补，等正常渲染路径给）
+            return
+        }
+        applyEnhancementBadge("增强中…")
     }
 
     private fun enhancementStatusEnabled(): Boolean {
@@ -312,6 +361,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
             // 同一个 ViewGroup 里默认「后加的画在上层」，会把角标整个盖住。
             // 给角标一个正的 Z（elevation），ViewGroup 就按 Z 排序绘制 —— 谁后加都不影响它在最上层。
             elevation = dpToPx(6f).toFloat()
+            // DSH: 点角标 = 折叠/展开完整文案。
+            isClickable = true
+            setOnClickListener { toggleEnhancementBadge() }
             visibility = View.GONE
         }
         val lp = LayoutParams(
@@ -356,8 +408,6 @@ open class ReaderPageImageView @JvmOverloads constructor(
         reason?.let {
             eu.kanade.tachiyomi.diagnostic.DiagLog.d("Waifu2xBadge", "page=$pageIndex 未出引擎结果: $it")
         }
-        if (skipEnhance || !enhancementStatusEnabled()) return
-        val tv = ensureEnhanceStatusView()
         // DSH: 只有「真·引擎出图」才算完成。AI 档下引擎为 NONE（没出结果 / CPU 无兜底）
         // 一律回到「增强中…」，等补算或下一次请求出图后再换 NPU OK。
         val engineOk = success &&
@@ -365,7 +415,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 Injekt.get<ReaderPreferences>().enhancementMode.get() != 5 ||
                     Waifu2x.engineFor(pageIndex) != Waifu2x.EngineKind.NONE
                 )
-        tv.text = if (engineOk) {
+        val full = if (engineOk) {
             String.format(
                 java.util.Locale.US,
                 "%s %.1fs%s",
@@ -378,8 +428,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         } else {
             "增强中…"
         }
-        tv.visibility = View.VISIBLE
-        tv.bringToFront()
+        applyEnhancementBadge(full)
     }
 
     /**

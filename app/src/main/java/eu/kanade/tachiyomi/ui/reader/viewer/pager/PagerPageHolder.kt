@@ -255,7 +255,35 @@ class PagerPageHolder(
         // 否则某页两次补算都失败后会永久停在 CPU 超分(用户反馈「CPU 超分不会刷新」,
         // 而 skip 页不走这条计数所以能刷新)。只有翻页才重置,停留不动不会重复触发。
         reEnhanceAttempts = 0
+        // DSH: 停在这一页时顺带把角标按当前设置重算一次(增强被关了要收干净,没增强的要亮提示)。
+        refreshEnhancementBadgeState(currentImageEnhanced)
         maybeReEnhance("settle")
+    }
+
+    /**
+     * DSH: 挂载/重新可见时角标自愈 —— 在阅读器里改增强设置后，这一页可能既不重新渲染、
+     * 也不再重发状态，角标就空着或停着旧文案（用户实测「刚关超分那一页」）。
+     */
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        refreshEnhancementBadgeState(currentImageEnhanced)
+    }
+
+    /**
+     * DSH: 图像设置变更（增强了/关了/换模型）后，把**当前这一页**再驱动一遍。
+     * 由 [PagerViewer.refreshAdapter] 在重建适配器后调用：只处理仍然挂着的 holder，
+     * 已经被回收的那些会由新 holder 自己渲染，不会重复干活。
+     */
+    internal fun rerenderAfterImageSettingsChange() {
+        if (!isAttachedToWindow) return
+        eu.kanade.tachiyomi.diagnostic.DiagLog.d(
+            "KomihoRebuild",
+            "page=${page.index} rerender current holder after image settings change",
+        )
+        refreshEnhancementBadgeState(currentImageEnhanced)
+        renderedKey = null
+        loadJob?.cancel()
+        loadJob = scope.launch { loadPageAndProcessStatus(1) }
     }
 
     /**
