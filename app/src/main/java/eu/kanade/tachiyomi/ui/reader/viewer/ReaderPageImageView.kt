@@ -332,8 +332,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
             else -> when (Waifu2x.engineFor(pageIndex)) {
                 Waifu2x.EngineKind.QNN_HTP -> "NPU OK"
                 Waifu2x.EngineKind.NCNN_VULKAN -> "GPU OK"
-                // NONE = 引擎没出结果，本页由 CPU 重采样兜底（或首个引擎结果尚未登记）。
-                Waifu2x.EngineKind.NONE -> "CPU OK"
+                // NONE = 引擎没出结果。AI 档下 DSH 已取消 CPU 兜底，此时处于「等待重试」状态，
+                // 角标直说「NPU 重试」而不是谎报 CPU OK，方便用户判断是否真的卡住。
+                Waifu2x.EngineKind.NONE -> if (Injekt.get<ReaderPreferences>().enhancementMode.get() == 5) "NPU 重试" else "CPU OK"
             }
         }
     // MihonSY <--
