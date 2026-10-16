@@ -298,7 +298,13 @@ open class ReaderPageImageView @JvmOverloads constructor(
      * meant a concurrent page's fallback could mislabel this page (`CPU OK` on a page that ran
      * on the NPU); see [Waifu2x.engineFor].
      */
-    internal fun showEnhancementOutcome(success: Boolean, elapsedMillis: Long, output: String? = null) {
+    internal fun showEnhancementOutcome(
+        success: Boolean,
+        elapsedMillis: Long,
+        output: String? = null,
+        // DSH: 失败/跳过时角标要说什么。默认回退到字符串资源那一个单词 SKIP。
+        failLabel: String? = null,
+    ) {
         val preferences = Injekt.get<ReaderPreferences>()
         if (preferences.enhancementMode.get() == 0 || !preferences.showEnhancementStatus.get()) return
         val tv = ensureEnhanceStatusView()
@@ -313,7 +319,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 output?.let { " $it" }.orEmpty(),
             )
         } else {
-            context.getString(R.string.reader_enhancement_skipped)
+            failLabel ?: context.getString(R.string.reader_enhancement_skipped)
         }
         tv.visibility = View.VISIBLE
     }
@@ -529,7 +535,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             // Komiho: 尺寸门 / HARDWARE / 输入已回收这些「什么都没做」的情况由增强器
                             // 登记成 skip。角标必须显示 skip —— 否则会落回 engineLabel 的默认值
                             // `CPU OK`，看着像 CPU 做过增强（实测 1600×10064 这类大图就是如此）。
-                            val skipped = EnhanceTimings.takeSkipped(pageIndex)
+                            // DSH: 取跳过原因（不只是布尔），角标据此说人话而不是干巴巴一个 SKIP
+                            val skipReason = EnhanceTimings.takeSkipped(pageIndex)
+                            val skipped = skipReason != null
                             // Komiho (2026-10-13): 计时只取一次——既做角标耗时，也判「真增强过」。
                             val timing = EnhanceTimings.take(pageIndex)
                             // Komiho (2026-10-13): 被抢占打断（快速翻页 / 预热抢占）的页：
@@ -540,6 +548,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             onDecodeCompleted?.invoke(currentImageEnhanced, aborted)
                             showEnhancementOutcome(
                                 success = !skipped && !aborted,
+                                // DSH: 跳过 -> 说明原因；被抢占 -> 说「等待重试」而不是 SKIP
+                                failLabel = when {
+                                    skipReason != null -> skipReason.label
+                                    aborted -> "等待重试"
+                                    else -> null
+                                },
                                 // Komiho: 优先用解码器登记的实际计算耗时（解码 + 增强，已剔除等锁）；
                                 // 取不到才回退 Coil 外层墙钟（含排队会虚高）。
                                 elapsedMillis = when {

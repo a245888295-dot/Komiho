@@ -25,7 +25,27 @@ object EnhanceTimings {
      * 输入已回收。这些页没有任何引擎参与，角标若落回 [Waifu2x.engineFor] 的默认值会显示
      * `CPU OK`（误导成「CPU 做过增强」），所以要单独记成「跳过」。
      */
-    private val skipped = ConcurrentHashMap.newKeySet<Int>()
+    /**
+     * DSH: 跳过原因。原先只记一个布尔「跳过」，角标一律显示英文 `SKIP`，
+     * 用户看不懂这页到底为什么没增强。现在按原因区分，角标直接说人话。
+     */
+    enum class SkipReason(val label: String) {
+        /** 源图已比显示区大（fitRatio <= 1），AI 放大没有意义。 */
+        ALREADY_SHARP("跳过·已够清晰"),
+
+        /** 输入过大：×scale 后必然超过输出上限，先超分再缩回是白做。 */
+        TOO_LARGE("跳过·图过大"),
+
+        /** HARDWARE 位图读不到像素，无法参与增强。 */
+        HARDWARE("跳过·硬件位图"),
+
+        /** 输入位图已被回收。 */
+        RECYCLED("跳过·源已释放"),
+
+        UNKNOWN("跳过"),
+    }
+
+    private val skipped = ConcurrentHashMap<Int, SkipReason>()
 
     /** [pageIndex] 为 -1（未标注页号的请求）时忽略。 */
     fun put(pageIndex: Int, pureMillis: Long) {
@@ -37,19 +57,19 @@ object EnhanceTimings {
     /** 取走该页的耗时（取到即删）。取不到时调用方回退到旧口径。 */
     fun take(pageIndex: Int): Long? = map.remove(pageIndex)
 
-    /** 登记「本页没有做增强」。[-1]（未标注页号）时忽略。 */
-    fun markSkipped(pageIndex: Int) {
+    /** 登记「本页没有做增强」及原因。[-1]（未标注页号）时忽略。 */
+    fun markSkipped(pageIndex: Int, reason: SkipReason = SkipReason.UNKNOWN) {
         if (pageIndex < 0) return
         // 兜底：正常路径都会 takeSkipped 消费掉，但页面可能根本没渲染到角标那一步
         // （解码失败、holder 提前回收）。不让它无限增长，也不会拿陈年标记去误标新页。
         if (skipped.size > MAX_SKIPPED) {
             skipped.clear()
         }
-        skipped.add(pageIndex)
+        skipped[pageIndex] = reason
     }
 
-    /** 取走该页的「跳过」标记（取到即删）。 */
-    fun takeSkipped(pageIndex: Int): Boolean = skipped.remove(pageIndex)
+    /** 取走该页的「跳过」标记与原因（取到即删）。null = 本页没有跳过。 */
+    fun takeSkipped(pageIndex: Int): SkipReason? = skipped.remove(pageIndex)
 
     /** skip 标记的保留上限（见 [markSkipped] 的兜底清理）。 */
     private const val MAX_SKIPPED = 64

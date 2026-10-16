@@ -201,7 +201,11 @@ class TachiyomiImageDecoder(private val resources: ImageSource, private val opti
                 if (preferences.enhancementMode.get() != 0 || preferences.denoiseLevel.get() != 0) {
                     if (skipAi) {
                         // Komiho: AI 跳过门命中 —— 登记 skip，角标显示「跳过」，原图直出。
-                        EnhanceTimings.markSkipped(options.pageIndex)
+                        // DSH: 带上原因 —— 此门是「源图已够清晰，放大无意义」。
+                        EnhanceTimings.markSkipped(
+                            options.pageIndex,
+                            EnhanceTimings.SkipReason.ALREADY_SHARP,
+                        )
                     } else {
                         // Komiho 诊断：来源标识 = 谁发起的 + 第几页。
                         // 用来判断并发增强请求是「同一页被算了两遍」还是「相邻两页各一次」——

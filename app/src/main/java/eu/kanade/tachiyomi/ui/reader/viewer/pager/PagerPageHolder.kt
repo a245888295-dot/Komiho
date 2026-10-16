@@ -425,12 +425,18 @@ class PagerPageHolder(
                     // Komiho: enhanceElapsedMillis = -1 表示这份预处理**没有做过增强**（尺寸门 /
                     // 已解到位图等），角标要显示 SKIP 而不是 CPU OK。这条路径不走 Coil 解码，
                     // 因此顺手把 skip 标记消费掉，避免陈旧标记残留、误标后续同号页。
-                    val enhancementSkipped = result.enhanceElapsedMillis < 0 ||
-                        EnhanceTimings.takeSkipped(pageIndex)
+                    // DSH: takeSkipped 现在返回 SkipReason?,角标据此显示具体原因
+                    val skipReason = EnhanceTimings.takeSkipped(pageIndex)
+                    val enhancementSkipped = result.enhanceElapsedMillis < 0 || skipReason != null
                     showEnhancementOutcome(
                         success = !enhancementSkipped,
                         elapsedMillis = result.enhanceElapsedMillis,
                         output = "${bitmap.width}×${bitmap.height}",
+                        failLabel = when {
+                            skipReason != null -> skipReason.label
+                            result.enhanceElapsedMillis < 0 -> "跳过·未走增强"
+                            else -> null
+                        },
                     )
                 } else {
                     // Komiho (2026-10-13): 现场解码路径——先保留源（未增强时补算要用），
