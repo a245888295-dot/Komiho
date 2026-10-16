@@ -364,6 +364,19 @@ class PagerPageHolder(
             pageIndex = page.index
             var prepared = viewer.preparedCache.get(key)
             val prewarmHit = prepared != null
+            // DSH (2026-10-16): 「增强中…」从这一刻点亮 —— 真正耗时的 NPU 计算就在下面的
+            // preparePure 里（同步 Coil execute → MihonSyEnhancer），这段黑屏以前完全没有提示。
+            // 命中已增强的缓存时不点（马上就是 NPU OK，点了反而闪一下）。
+            if (viewer.isCurrentItem(item) &&
+                prepared?.enhanced != true &&
+                preferences.enhancementMode.get() != 0 &&
+                page?.skipEnhance != true
+            ) {
+                withUIContext { showEnhancementPending() }
+            }
+            // DSH: 位图路径不走 setImage(source…)，这里同步一次「本页是否跳过增强」，
+            // 免得角标把用户主动关掉增强的页也标成「增强中…」。
+            skipEnhance = page?.skipEnhance ?: false
             if (prepared == null) {
                 prepared = PagerPagePreparer.preparePure(
                     viewer = viewer,
@@ -423,20 +436,18 @@ class PagerPageHolder(
                     appliedSource = if (result.enhanced) null else result.source
                     // SY: 预解码路径补发增强角标（现场解码路径由 SSIV 的 Coil 回调触发）
                     // Komiho: enhanceElapsedMillis = -1 表示这份预处理**没有做过增强**（尺寸门 /
-                    // 已解到位图等），角标要显示 SKIP 而不是 CPU OK。这条路径不走 Coil 解码，
+                    // 已解到位图等），角标保持「增强中…」而不是冒充 CPU OK。这条路径不走 Coil 解码，
                     // 因此顺手把 skip 标记消费掉，避免陈旧标记残留、误标后续同号页。
-                    // DSH: takeSkipped 现在返回 SkipReason?,角标据此显示具体原因
+                    // DSH: takeSkipped 现在返回 SkipReason?,这个原因只写日志 ——
+                    // 画面上不再有「跳过·xxx」，没出 NPU OK 之前角标一律是「增强中…」。
                     val skipReason = EnhanceTimings.takeSkipped(pageIndex)
                     val enhancementSkipped = result.enhanceElapsedMillis < 0 || skipReason != null
                     showEnhancementOutcome(
                         success = !enhancementSkipped,
                         elapsedMillis = result.enhanceElapsedMillis,
                         output = "${bitmap.width}×${bitmap.height}",
-                        failLabel = when {
-                            skipReason != null -> skipReason.label
-                            result.enhanceElapsedMillis < 0 -> "跳过·未走增强"
-                            else -> null
-                        },
+                        reason = skipReason?.label
+                            ?: if (result.enhanceElapsedMillis < 0) "预解码未增强" else null,
                     )
                 } else {
                     // Komiho (2026-10-13): 现场解码路径——先保留源（未增强时补算要用），
@@ -767,6 +778,8 @@ class PagerPageHolder(
      */
     private fun setError(error: Throwable?) {
         progressIndicator?.hide()
+        // DSH: 准备阶段就失败时，别把「增强中…」留在错误页上。
+        hideEnhancementStatus()
         showErrorLayout(error)
         // Komiho: 触发「正在打开」窗口的章节首图解码失败 → 收起提示（与 onImageLoaded 同源，避免卡在错误页上）。
         if (page.chapter.chapter.id != null &&

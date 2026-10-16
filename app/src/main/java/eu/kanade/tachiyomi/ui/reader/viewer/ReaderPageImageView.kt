@@ -17,7 +17,6 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.TextView
 import android.widget.FrameLayout
-import eu.kanade.tachiyomi.R
 import androidx.annotation.AttrRes
 import androidx.annotation.CallSuper
 import androidx.annotation.StyleRes
@@ -248,76 +247,39 @@ open class ReaderPageImageView @JvmOverloads constructor(
     // MihonSY -->
     /**
      * MihonSY: small overlay at the bottom-left showing the image enhancement state.
-     * Shows the real outcome (elapsed time on success, 跳过 on failure).
+     * DSH (2026-10-16): 只有两种文案 —— 未出引擎结果时是「增强中…」，出图后是 `NPU OK 耗时 尺寸`；
+     * 「跳过」不再出现在画面上（原因只写 DiagLog）。
      * Created lazily and only when the "show enhancement status" toggle is on.
      */
     private var enhanceStatusView: TextView? = null
 
     /**
-     * DSH: 增强遮罩 —— 未超分完成前盖住画面。
+     * DSH (2026-10-16 重做): 「增强中…」的语义 —— 填住「请求增强 → NPU 真出图」这一段空白。
      *
-     * 用户诉求: 宁可暂时黑屏/模糊等待，也不要先看到未超分的糊图，
-     * 更不要看到「跳过」后还得手动翻页才刷新。增强期间直接给「增强中…」占位。
-     */
-    private var enhanceMaskView: View? = null
-
-    private fun ensureEnhanceMaskView(): View {
-        enhanceMaskView?.let { return it }
-        val container = android.widget.FrameLayout(context).apply {
-            setBackgroundColor(0xE6000000.toInt()) // 近乎不透明的黑，盖住下方的原图
-            visibility = View.GONE
-        }
-        val tv = TextView(context).apply {
-            text = "增强中…"
-            textSize = 15f
-            setTextColor(0xFFFFFFFF.toInt())
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
-        container.addView(
-            tv,
-            android.widget.FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER,
-            ),
-        )
-        addView(
-            container,
-            LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        enhanceMaskView = container
-        return container
-    }
-
-    /**
-     * 增强进行中：角标显示「增强中…」，并在 AI 档下用遮罩盖住画面。
-     * 由 [setImage] 在真正发起增强请求前调用。
+     * 上一版的错在挂载点：提示挂在 Coil 入队那一刻，而真正耗时的 NPU 计算发生在**入队之前**
+     * 的预解码里（[PagerPagePreparer.preparePure] → 同步 `imageLoader.execute()`），
+     * 于是黑屏那段反而没有任何提示；整屏遮罩又是第二个提示源，且只在增强成功时才撤，
+     * 失败/跳过时永久留着，和角标文案叠在一起。
+     *
+     * 现在只保留这一个提示源（左下角，就是 NPU OK 那个位置）：
+     * 请求开始 → [showEnhancementPending] 点亮「增强中…」；只有真拿到引擎出图，
+     * [showEnhancementOutcome] 才换成 `NPU OK 耗时 尺寸`，其余情况一律继续显示「增强中…」。
      */
     internal fun showEnhancementPending() {
-        val preferences = Injekt.get<ReaderPreferences>()
-        if (preferences.enhancementMode.get() == 0) return
-        // AI 档才遮罩：CPU 重采样档位本身就是 CPU 处理，遮了没意义。
-        if (preferences.enhancementMode.get() == 5) {
-            ensureEnhanceMaskView().visibility = View.VISIBLE
-        }
-        if (preferences.showEnhancementStatus.get()) {
-            val tv = ensureEnhanceStatusView()
-            tv.text = "增强中…"
-            tv.visibility = View.VISIBLE
-        }
+        if (skipEnhance || !enhancementStatusEnabled()) return
+        val tv = ensureEnhanceStatusView()
+        tv.text = "增强中…"
+        tv.visibility = View.VISIBLE
     }
 
-    private fun updateEnhanceMask(enhanced: Boolean) {
-        val mask = enhanceMaskView ?: return
+    /** 页面根本没走增强（用户对单页关掉增强 / 关闭增强档位）时不留痕迹。 */
+    internal fun hideEnhancementStatus() {
+        enhanceStatusView?.visibility = View.GONE
+    }
+
+    private fun enhancementStatusEnabled(): Boolean {
         val preferences = Injekt.get<ReaderPreferences>()
-        if (preferences.enhancementMode.get() != 5) {
-            mask.visibility = View.GONE
-            return
-        }
-        mask.visibility = if (enhanced) View.GONE else View.VISIBLE
+        return preferences.enhancementMode.get() != 0 && preferences.showEnhancementStatus.get()
     }
 
     private fun ensureEnhanceStatusView(): TextView {
@@ -351,7 +313,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
 
     /**
      * MihonSY: shows the enhancement outcome badge. Success shows which engine actually ran
-     * plus the real elapsed time; failure/skip shows 跳过. No-op unless enhancement is on
+     * plus the real elapsed time; 还没出引擎结果时是「增强中…」。No-op unless enhancement is on
      * AND the status toggle is on. Enhancement itself runs synchronously inside the Coil
      * decoder, so this is only called from the Coil success/error listeners — plus
      * PagerPageHolder for the pre-decoded bitmap path (SY: Page 优化，耗时来自预处理阶段).
@@ -369,16 +331,23 @@ open class ReaderPageImageView @JvmOverloads constructor(
         success: Boolean,
         elapsedMillis: Long,
         output: String? = null,
-        // DSH: 失败/跳过时角标要说什么。默认回退到字符串资源那一个单词 SKIP。
-        failLabel: String? = null,
+        // DSH: 没出引擎结果的原因。只写日志（DiagLog），不显示给用户 ——
+        // 「跳过·已够清晰」这类字样已经取消，用户只要知道「还在增强中」。
+        reason: String? = null,
     ) {
-        val preferences = Injekt.get<ReaderPreferences>()
-        // DSH: 无论状态角标开关如何，遮罩都要跟着增强结果走 —— 没增强成功就继续盖着，
-        // 避免用户看到未超分的画面并误以为「就这样了」。
-        updateEnhanceMask(success)
-        if (preferences.enhancementMode.get() == 0 || !preferences.showEnhancementStatus.get()) return
+        reason?.let {
+            eu.kanade.tachiyomi.diagnostic.DiagLog.d("Waifu2xBadge", "page=$pageIndex 未出引擎结果: $it")
+        }
+        if (skipEnhance || !enhancementStatusEnabled()) return
         val tv = ensureEnhanceStatusView()
-        tv.text = if (success) {
+        // DSH: 只有「真·引擎出图」才算完成。AI 档下引擎为 NONE（没出结果 / CPU 无兜底）
+        // 一律回到「增强中…」，等补算或下一次请求出图后再换 NPU OK。
+        val engineOk = success &&
+            (
+                Injekt.get<ReaderPreferences>().enhancementMode.get() != 5 ||
+                    Waifu2x.engineFor(pageIndex) != Waifu2x.EngineKind.NONE
+                )
+        tv.text = if (engineOk) {
             String.format(
                 java.util.Locale.US,
                 "%s %.1fs%s",
@@ -389,7 +358,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 output?.let { " $it" }.orEmpty(),
             )
         } else {
-            failLabel ?: context.getString(R.string.reader_enhancement_skipped)
+            "增强中…"
         }
         tv.visibility = View.VISIBLE
     }
@@ -605,23 +574,24 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             // Komiho: 尺寸门 / HARDWARE / 输入已回收这些「什么都没做」的情况由增强器
                             // 登记成 skip。角标必须显示 skip —— 否则会落回 engineLabel 的默认值
                             // `CPU OK`，看着像 CPU 做过增强（实测 1600×10064 这类大图就是如此）。
-                            // DSH: 取跳过原因（不只是布尔），角标据此说人话而不是干巴巴一个 SKIP
+                            // DSH: 取未增强的原因（不只是布尔）—— 只写日志，画面上不再出现「跳过」
                             val skipReason = EnhanceTimings.takeSkipped(pageIndex)
                             val skipped = skipReason != null
                             // Komiho (2026-10-13): 计时只取一次——既做角标耗时，也判「真增强过」。
                             val timing = EnhanceTimings.take(pageIndex)
                             // Komiho (2026-10-13): 被抢占打断（快速翻页 / 预热抢占）的页：
-                            // 无成功计时、无 skip 标记，但原生有打断记录。角标要显示「跳过」，
-                            // 不能冒充引擎 OK + 墙钟假耗时；holder 也据此在停顿后补算一次。
+                            // 无成功计时、无 skip 标记，但原生有打断记录。角标不能冒充引擎
+                            // OK + 墙钟假耗时，继续保持「增强中…」；holder 也据此在停顿后补算一次。
                             val aborted = !skipped && timing == null && Waifu2x.wasAborted(pageIndex)
                             currentImageEnhanced = timing != null || skipped
                             onDecodeCompleted?.invoke(currentImageEnhanced, aborted)
                             showEnhancementOutcome(
                                 success = !skipped && !aborted,
-                                // DSH: 跳过 -> 说明原因；被抢占 -> 说「等待重试」而不是 SKIP
-                                failLabel = when {
+                                // DSH: 原因只进日志；画面上不再出现「跳过」/「等待重试」这类字样，
+                                // 未出引擎结果就是「增强中…」。
+                                reason = when {
                                     skipReason != null -> skipReason.label
-                                    aborted -> "等待重试"
+                                    aborted -> "被抢占，等停顿补算"
                                     else -> null
                                 },
                                 // Komiho: 优先用解码器登记的实际计算耗时（解码 + 增强，已剔除等锁）；
@@ -642,10 +612,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             // 永远不释放，之后真需要补算时会被自己挡住。
                             currentImageEnhanced = false
                             onDecodeCompleted?.invoke(false, false)
-                            showEnhancementOutcome(
-                                success = false,
-                                elapsedMillis = android.os.SystemClock.uptimeMillis() - startTime,
-                            )
+                            // DSH: 加载失败时错误界面自己会说明情况，别在上面再挂一个「增强中…」。
+                            hideEnhancementStatus()
                         },
                     )
                     .size(ViewSizeResolver(this@ReaderPageImageView))
@@ -655,8 +623,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     .crossfade(false)
                     .build()
                     .also {
-                        // DSH: 真正发起增强前就给「增强中…」提示 + 遮罩，
-                        // 覆盖黑屏/原图两种状态，直到超分完毕显示 NPU OK。
+                        // DSH: 现场解码路径（源交给 Coil 在 view 里再解一次）也在请求时点亮提示。
+                        // 真正耗时的预解码路径由 PagerPageHolder 在开始准备时就点亮，
+                        // 两处共用同一个角标，不存在两个提示源打架。
                         showEnhancementPending()
                     }
                     .let(context.imageLoader::enqueue)
