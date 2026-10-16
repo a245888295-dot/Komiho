@@ -72,20 +72,43 @@ jobs:
       - name: Grant gradlew execute permission
         run: chmod +x gradlew
 
+      # 签名密钥:先从 Actions 缓存恢复,保证同一仓库历次构建签名一致
+      # (签名一致才能直接覆盖安装,不必先卸载旧版)。
+      - name: Cache signing keystore
+        uses: actions/cache@v6
+        with:
+          path: keystore
+          key: komiho-signing-keystore-v1
+
       # Komiho V2: fixed debug keystore — every build carries the same signature
       # so APKs can be installed over the previous one (no uninstall needed).
-      - name: Decode fixed debug keystore
+      # 优先用仓库 Secret;没配就自动生成(密码与 build.gradle.kts 默认值一致)。
+      - name: Prepare fixed debug keystore
         run: |
           mkdir -p keystore
-          echo "${{ secrets.KOMIHO_DEBUG_KEYSTORE_BASE64 }}" | base64 -d > keystore/komiho-debug.jks
+          if [ ! -s keystore/komiho-debug.jks ] && [ -n "${{ secrets.KOMIHO_DEBUG_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KOMIHO_DEBUG_KEYSTORE_BASE64 }}" | base64 -d > keystore/komiho-debug.jks
+          fi
+          if [ ! -s keystore/komiho-debug.jks ]; then
+            echo "::notice::未找到 debug keystore,自动生成一个"
+            keytool -genkeypair -v -keystore keystore/komiho-debug.jks -storetype PKCS12 -alias komiho -keyalg RSA -keysize 2048 -validity 10000 -storepass komihodbg -keypass komihodbg -dname "CN=Komiho Debug, O=Komiho, C=CN"
+          fi
           ls -la keystore/
 
       # Komiho V2: independent release keystore (PKCS12, alias komiho-release) —
       # distinct from MihonSY's mihonmod key so the two apps can coexist.
-      - name: Decode release keystore
+      # 优先用仓库 Secret;没配就自动生成(密码与 build.gradle.kts 默认值一致),
+      # 并由上面的 cache 持久化,避免每次构建签名不同。
+      - name: Prepare release keystore
         run: |
           mkdir -p keystore
-          echo "${{ secrets.KOMIHO_RELEASE_KEYSTORE_BASE64 }}" | base64 -d > keystore/komiho-release.jks
+          if [ ! -s keystore/komiho-release.jks ] && [ -n "${{ secrets.KOMIHO_RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KOMIHO_RELEASE_KEYSTORE_BASE64 }}" | base64 -d > keystore/komiho-release.jks
+          fi
+          if [ ! -s keystore/komiho-release.jks ]; then
+            echo "::notice::未找到 release keystore,自动生成一个"
+            keytool -genkeypair -v -keystore keystore/komiho-release.jks -storetype PKCS12 -alias komiho-release -keyalg RSA -keysize 2048 -validity 10000 -storepass komihorelease123 -keypass komihorelease123 -dname "CN=Komiho CI, O=Komiho, C=CN"
+          fi
           ls -la keystore/
 
       # Komiho: resolve publish mode —— 必须在构建之前定，因为两种模式的 ABI 集合不同
@@ -126,7 +149,9 @@ jobs:
       #   formal → arm64 + 合并包（= `-PkomihoUniversal=true`），供不挑 ABI 的用户直接装
       - name: Build release APK
         env:
-          KOMIHO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD }}
+          # Secret 未配置时 secrets 展开为空串,而 build.gradle.kts 的 ?: 只在 null 时
+          # 用默认值,所以这里显式兜底成与自动生成密钥一致的密码。
+          KOMIHO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD != '' && secrets.KOMIHO_RELEASE_KEYSTORE_PASSWORD || 'komihorelease123' }}
         run: |
           EXTRA=""
           if [ "${{ steps.mode.outputs.mode }}" = "formal" ]; then
