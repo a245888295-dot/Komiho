@@ -57,7 +57,8 @@ object MihonSyEnhancer {
      * 倍率。AI 档（mode 5）由模型固定为 2x；CPU 档（2/3）用 [ReaderPreferences.lanczosScale]。
      * 只用于 [exceedsOutputCap] 的预判，实际缩放仍由各自分支决定。
      */
-    private const val AI_UPSCALE_FACTOR = 2f
+    // DSH (2026-10-16): 删掉写死的 AI 2x —— 模型包里的 QNN 模型可以是 3x
+    // (如 realcugan-pro-x3-*)。倍率一律读所选模型自己的 scale,见 [scaleFor]。
 
     /**
      * Komiho: AI 面积回缩触发门。AI 2x 结果相对显示区的缩比 ≥ 此值时不动它 —— 轻度缩小
@@ -463,9 +464,15 @@ object MihonSyEnhancer {
         return if (cpu in 2..3) cpu else 2
     }
 
-    /** 当前档位实际会用到的放大倍率（AI 档固定见 [AI_UPSCALE_FACTOR]，CPU 档取偏好）。 */
+    /**
+     * 当前档位实际会用到的放大倍率。
+     *
+     * DSH (2026-10-16): AI 档改为读**所选模型自己的 scale**（插件包里有 x2 也有 x3）——
+     * 以前写死 2f，选 3x 模型时输出面积/内存护栏会算错（3x 出图被按 2x 估算）。
+     * CPU 档仍取偏好倍率。
+     */
     private fun scaleFor(mode: Int, preferences: ReaderPreferences): Float =
-        if (mode == 5) AI_UPSCALE_FACTOR else preferences.lanczosScale.get() / 100f
+        if (mode == 5) resolveAiModel(preferences).scale.toFloat() else preferences.lanczosScale.get() / 100f
 
     /**
      * [input] 经当前档位放大后，像素总量是否会超过 [MAX_ENHANCE_OUTPUT_PIXELS]。
