@@ -270,6 +270,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val tv = ensureEnhanceStatusView()
         tv.text = "增强中…"
         tv.visibility = View.VISIBLE
+        tv.bringToFront()
     }
 
     /** 页面根本没走增强（用户对单页关掉增强 / 关闭增强档位）时不留痕迹。 */
@@ -287,6 +288,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
         val tv = ensureEnhanceStatusView()
         tv.text = "增强失败"
         tv.visibility = View.VISIBLE
+        tv.bringToFront()
     }
 
     private fun enhancementStatusEnabled(): Boolean {
@@ -306,6 +308,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 cornerRadius = dpToPx(4f).toFloat()
             }
             setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            // DSH: 页面图是**后** addView 进来的（prepareNonAnimatedImageView → addView(pageView)），
+            // 同一个 ViewGroup 里默认「后加的画在上层」，会把角标整个盖住。
+            // 给角标一个正的 Z（elevation），ViewGroup 就按 Z 排序绘制 —— 谁后加都不影响它在最上层。
+            elevation = dpToPx(6f).toFloat()
             visibility = View.GONE
         }
         val lp = LayoutParams(
@@ -373,6 +379,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
             "增强中…"
         }
         tv.visibility = View.VISIBLE
+        tv.bringToFront()
     }
 
     /**

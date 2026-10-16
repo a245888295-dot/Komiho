@@ -235,6 +235,17 @@ class PagerPageHolder(
     }
 
     /**
+     * DSH: 这一页现在需要点「增强中…」吗 —— 增强关着 / 用户对单页关掉增强 都不用点；
+     * 预处理缓存里已经有「真增强过」的位图时也不点（马上就是 NPU OK，别先闪一下增强中）。
+     */
+    private fun needsEnhancementHint(): Boolean {
+        if (page.skipEnhance == true) return false
+        if (Injekt.get<ReaderPreferences>().enhancementMode.get() == 0) return false
+        val key = viewer.preparedCache.key(page, extraPage)
+        return viewer.preparedCache.get(key)?.enhanced != true
+    }
+
+    /**
      * Komiho (2026-10-13): ViewPager 停顿回调 = 「翻页停止」。除既有的 landscapeZoom 外，
      * 若当前屏上图是被抢占打断的未增强图，补算一次（issue：快速翻页后停在此页停在原图）。
      */
@@ -285,6 +296,13 @@ class PagerPageHolder(
         val page = if (pageIndex == 1) page else extraPage
         page ?: return
         // SY <--
+        // DSH: 「增强中…」从这里就开始点亮 —— 黑屏等待是从「开始加载这一页」起步的，
+        // 以前挂在 Page.Ready（=等待结束）才点亮，等于整段等待都没有提示。
+        // 不设 isCurrentItem 门槛：翻页瞬间 pager.currentItem 还没落定，卡这个会让
+        // 「正在等的那一页」反而没有提示。离屏页也会点亮，但不可见、无害。
+        if (pageIndex == 1 && needsEnhancementHint()) {
+            withUIContext { showEnhancementPending() }
+        }
         val loader = page.chapter.pageLoader ?: return
         supervisorScope {
             launchIO {
@@ -388,14 +406,9 @@ class PagerPageHolder(
             pageIndex = page.index
             var prepared = viewer.preparedCache.get(key)
             val prewarmHit = prepared != null
-            // DSH (2026-10-16): 「增强中…」从这一刻点亮 —— 真正耗时的 NPU 计算就在下面的
-            // preparePure 里（同步 Coil execute → MihonSyEnhancer），这段黑屏以前完全没有提示。
-            // 命中已增强的缓存时不点（马上就是 NPU OK，点了反而闪一下）。
-            if (viewer.isCurrentItem(item) &&
-                prepared?.enhanced != true &&
-                preferences.enhancementMode.get() != 0 &&
-                page?.skipEnhance != true
-            ) {
+            // DSH: 真正耗时的 NPU 计算就在下面的 preparePure 里（同步 Coil execute →
+            // MihonSyEnhancer），这条路上再确认一次提示是亮的（上面的 loadPage 阶段已经点过）。
+            if (needsEnhancementHint()) {
                 withUIContext { showEnhancementPending() }
             }
             // DSH: 位图路径不走 setImage(source…)，这里同步一次「本页是否跳过增强」，
