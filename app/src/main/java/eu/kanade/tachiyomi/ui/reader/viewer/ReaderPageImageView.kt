@@ -277,6 +277,18 @@ open class ReaderPageImageView @JvmOverloads constructor(
         enhanceStatusView?.visibility = View.GONE
     }
 
+    /**
+     * DSH: 这一页最终没能超分（补算次数用尽 / 没有可重算的源）。
+     * 原图照常显示，角标在 NPU OK 那个位置改说「增强失败」——
+     * 正常情况极少出现（用户实测约一百页遇不到一次）。
+     */
+    internal fun showEnhancementFailed() {
+        if (skipEnhance || !enhancementStatusEnabled()) return
+        val tv = ensureEnhanceStatusView()
+        tv.text = "增强失败"
+        tv.visibility = View.VISIBLE
+    }
+
     private fun enhancementStatusEnabled(): Boolean {
         val preferences = Injekt.get<ReaderPreferences>()
         return preferences.enhancementMode.get() != 0 && preferences.showEnhancementStatus.get()
@@ -583,7 +595,9 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             // 无成功计时、无 skip 标记，但原生有打断记录。角标不能冒充引擎
                             // OK + 墙钟假耗时，继续保持「增强中…」；holder 也据此在停顿后补算一次。
                             val aborted = !skipped && timing == null && Waifu2x.wasAborted(pageIndex)
-                            currentImageEnhanced = timing != null || skipped
+                            // DSH: 只有「真增强」才算这一页完成。以前把 skip 也算完成，
+                            // 于是被 skip 的页永远不会再补算 —— 用户实测：「一显示跳过，超分就停了」。
+                            currentImageEnhanced = timing != null
                             onDecodeCompleted?.invoke(currentImageEnhanced, aborted)
                             showEnhancementOutcome(
                                 success = !skipped && !aborted,

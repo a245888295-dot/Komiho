@@ -135,6 +135,12 @@ class PagerPageHolder(
     /** Komiho 修复：限制最大补算重试次数，防止硬件持续失败时陷入无限重试风暴 */
     private var reEnhanceAttempts = 0
 
+    /**
+     * DSH: 每次「停在这一页」最多补算几次。用尽才认输（角标显示「增强失败」），
+     * 翻页回来会重置 — 用户要求「超分就要全部超分」，不能因为一次抢占就永久停在原图。
+     */
+    private val maxReEnhanceAttempts = 2
+
     private val pendingReEnhance = Runnable { maybeReEnhance("late") }
 
     init {
@@ -183,7 +189,6 @@ class PagerPageHolder(
      */
     private fun maybeReEnhance(reason: String) {
         if (currentImageEnhanced || reEnhanceInFlight) return
-        val src = appliedSource ?: return
         if (appliedAnimated) return
         if (page?.skipEnhance == true) return
         val preferences = Injekt.get<ReaderPreferences>()
@@ -193,8 +198,18 @@ class PagerPageHolder(
         if (mode == 2 || mode == 3) return
         if (!viewer.isCurrentItem(item)) return
 
-        // 最多补算 2 次，避免硬件彻底坏掉时死循环
-        if (reEnhanceAttempts >= 2) return
+        // DSH: 到这里说明这一页确实没超分、而且已经没得再试了 ——
+        // 原图照常显示，角标在 NPU OK 那个位置改说「增强失败」。
+        // （翻页回来 onPageSelected 会重置次数，所以还能再试一轮。）
+        if (reEnhanceAttempts >= maxReEnhanceAttempts) {
+            markEnhanceFailed("补算次数用尽($maxReEnhanceAttempts)")
+            return
+        }
+        val src = appliedSource
+        if (src == null) {
+            markEnhanceFailed("没有可重算的源")
+            return
+        }
         reEnhanceAttempts++
 
         reEnhanceInFlight = true
@@ -208,6 +223,15 @@ class PagerPageHolder(
             "page=${page.index} reason=$reason id=${System.identityHashCode(this)}",
         )
         setImage(src.peek(), appliedAnimated, viewerImageConfig(), page?.skipEnhance ?: false)
+    }
+
+    /** 这一页最终没超分：写日志 + 角标改说「增强失败」（原图不动）。 */
+    private fun markEnhanceFailed(reason: String) {
+        eu.kanade.tachiyomi.diagnostic.DiagLog.w(
+            "Waifu2xReEnhance",
+            "page=${page.index} 增强失败: $reason",
+        )
+        showEnhancementFailed()
     }
 
     /**
@@ -434,6 +458,9 @@ class PagerPageHolder(
                     currentImageEnhanced = result.enhanced
                     appliedAnimated = result.isAnimated
                     appliedSource = if (result.enhanced) null else result.source
+                    // DSH: 预解码这份没增强（被抢占 / 门禁）→ 和现场解码路径一样立刻排一次补算。
+                    // 以前只靠翻页停顿触发，用户停在这一页就永远停在原图上（「超分要全部超分」）。
+                    if (!result.enhanced) handleDecodeCompleted(false, true)
                     // SY: 预解码路径补发增强角标（现场解码路径由 SSIV 的 Coil 回调触发）
                     // Komiho: enhanceElapsedMillis = -1 表示这份预处理**没有做过增强**（尺寸门 /
                     // 已解到位图等），角标保持「增强中…」而不是冒充 CPU OK。这条路径不走 Coil 解码，
