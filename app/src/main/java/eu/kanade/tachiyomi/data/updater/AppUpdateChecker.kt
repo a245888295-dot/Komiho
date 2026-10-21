@@ -37,10 +37,12 @@ class AppUpdateChecker {
 
 val GITHUB_REPO: String by lazy {
     // SY -->
+    // Komiho (2026-10-21): 检查更新指向本分支自己的仓库（a245888295-dot/Komiho），
+    // 不再看上游 ruzhe85/Komiho —— 否则检查到的是原作者的版本，装了也会被当成「非本分支」。
     if (isPreviewBuildType) {
-        "ruzhe85/Komiho"
+        "a245888295-dot/Komiho"
     } else {
-        "ruzhe85/Komiho"
+        "a245888295-dot/Komiho"
     }
     // SY <--
 }

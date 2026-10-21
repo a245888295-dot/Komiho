@@ -5105,7 +5105,7 @@ private fun hostOf(url: String): String {
  *   适合不方便注册 GitHub 的用户。
  */
 private const val KOMIHA_FEEDBACK_GITHUB_URL =
-    "https://github.com/ruzhe85/Komiho/issues/new?template=report_issue.yml"
+    "https://github.com/a245888295-dot/Komiho/issues/new?template=report_issue.yml"
 
 private const val KOMIHA_FEEDBACK_SURVEY_URL = "https://wj.qq.com/s2/28205488/fiyd/"
 
@@ -5253,7 +5253,7 @@ private fun KomgaAbout(
         )
         AboutActionRow(
             title = composeStringResource(R.string.about_source_code),
-            onClick = { context.openInBrowser("https://github.com/ruzhe85/Komiho") },
+            onClick = { context.openInBrowser("https://github.com/a245888295-dot/Komiho") },
             trailing = {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
