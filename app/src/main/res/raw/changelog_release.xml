@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <changelog bulletedList="true">
+    <changelogversion versionName="1.5.2-beta" changeDate="October 21,2026">
+        <changelogtext>[b]Komiho 1.5.2-beta[/b]（测试版）</changelogtext>
+        <changelogtext>[b]修复[/b] 快速翻页停下后「角标显示 NPU OK 但画面黑屏」和「一直停在增强中」（1.5.1-beta 引入的回归）</changelogtext>
+        <changelogtext>[b]修复[/b] 已选本地来源后冷启动仍进欢迎页，要求重新选择来源</changelogtext>
+        <changelogtext>[b]修复[/b] 欢迎页横屏时「开始使用」按钮被挤出屏幕、无法点击</changelogtext>
+        <changelogtext>[b]修复[/b] 更新日志弹窗缺少新版本内容</changelogtext>
+    </changelogversion>
     <changelogversion versionName="1.5.1-beta" changeDate="October 21,2026">
         <changelogtext>[b]Komiho 1.5.1-beta[/b]（测试版）</changelogtext>
         <changelogtext>[b]新增[/b] 快速翻页时跳过 AI 增强：翻页瞬间直接出原图，停下 0.6 秒后自动补超分并预热后面几页（设置 → 图像可关闭）</changelogtext>
