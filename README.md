@@ -102,10 +102,27 @@ Komiho 把不同来源的漫画统一到同一套浏览与阅读体验：
 
 ## 👤 关于
 
+本项目是**个人自用**的独立分支，非官方项目，也不代表任何上游项目的立场。
+
 * **作者**：[a245888295-dot](https://github.com/a245888295-dot)
 * **AI 协作**：DeepSeek V4.1
 
-本项目为测试阶段的独立分支，尚未正式开源对外协作；反馈与建议欢迎通过「关于 → 问题建议反馈」提交。
+反馈与建议欢迎通过「关于 → 问题建议反馈」提交。
+
+---
+
+## 🙏 致谢
+
+Komiho 站在这些开源项目的肩上，没有它们就没有这个应用：
+
+* [Mihon](https://github.com/mihonapp/mihon) / [Tachiyomi](https://github.com/tachiyomiorg) — 阅读器的架构与基础
+* **MihonSY（SY 分支）** — 本分支的直接上游，阅读器主体与大量阅读体验优化来自这里
+* [Komikku](https://github.com/komikku-app/komikku) — 图像增强的调度策略、模型四轴与设置项设计参考
+* [ncnn](https://github.com/Tencent/ncnn)、[waifu2x](https://github.com/nagadomi/waifu2x)、[Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)、[Real-CUGAN](https://github.com/nihui/realcugan-ncnn-vulkan) — 超分推理框架与模型
+* [Coil](https://github.com/coil-kt/coil)、[Subsampling Scale Image View](https://github.com/davemorrissey/subsampling-scale-image-view) 等 — Android 基础库
+* 以及所有提交过代码、报告过问题、写过文档的贡献者
+
+**感谢开源，感谢每一位让这些工具存在的人。**
 
 ---
 

@@ -104,11 +104,28 @@ Adaptive layouts for phones, tablets and large screens, with bottom / left / rig
 
 ## 👤 About
 
+This is a **personal, self-use** independent branch. It is not an official project and does not
+represent the position of any upstream project.
+
 * **Author**: [a245888295-dot](https://github.com/a245888295-dot)
 * **AI collaboration**: DeepSeek V4.1
 
-This is an independent branch in its testing phase and is not yet open for external contribution.
 Feedback is welcome via "About → Feedback & suggestions".
+
+---
+
+## 🙏 Acknowledgements
+
+Komiho stands on the shoulders of these open-source projects — without them it would not exist:
+
+* [Mihon](https://github.com/mihonapp/mihon) / [Tachiyomi](https://github.com/tachiyomiorg) — the reader architecture this app is built on
+* **MihonSY (the SY branch)** — the direct upstream of this branch; the reader core and many reading-experience improvements come from it
+* [Komikku](https://github.com/komikku-app/komikku) — reference for enhancement scheduling, the four-axis model UI and related settings
+* [ncnn](https://github.com/Tencent/ncnn), [waifu2x](https://github.com/nagadomi/waifu2x), [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), [Real-CUGAN](https://github.com/nihui/realcugan-ncnn-vulkan) — super-resolution runtimes and models
+* [Coil](https://github.com/coil-kt/coil), [Subsampling Scale Image View](https://github.com/davemorrissey/subsampling-scale-image-view) and other Android libraries
+* And everyone who contributed code, reported issues or wrote documentation
+
+**Thanks to open source, and to everyone who makes these tools exist.**
 
 ---
 
