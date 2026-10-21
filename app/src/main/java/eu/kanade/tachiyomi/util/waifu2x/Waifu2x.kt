@@ -306,6 +306,19 @@ object Waifu2x {
     var visiblePageIndex: Int = -1
 
     /**
+     * Komiho (2026-10-21): 快速翻页期间为 true。
+     *
+     * 语义：「用户还在连翻，别把 NPU 花在他已经翻走的页上」。
+     * 为 true 时 `ReaderPageImageView` 请求的是**不增强**的版本（原图直出，几十~几百毫秒），
+     * 由 `PagerViewer` 在翻页停止 600ms 后置回 false 并重渲染当前页。
+     *
+     * 放这里而不是放 Preferences：它是一份跨组件的瞬时状态（PagerViewer 写、渲染线程读），
+     * 与 [visiblePageIndex] 同一性质；值过期最坏后果是某一页晚 600ms 才补超分，无副作用。
+     */
+    @Volatile
+    var rapidPaging: Boolean = false
+
+    /**
      * Komiho (2026-10-01): 可见页优先闸门。
      *
      * 要解决的问题：进阅读器时 pager 窗口的 3 页会同时发起增强，而原生 `g_lock` 覆盖整次推理

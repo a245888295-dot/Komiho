@@ -6,9 +6,12 @@
 
 **A native Android manga reader**
 
-Supports **Komga, local files, WebDAV, SMB** and more comic sources
+Komga · local files · WebDAV · SMB — one UI for every comic source
 
-Package `cn.ruzhe.komiho` ｜ Version 1.5.0 (14) ｜ Android 8.0+
+`cn.ruzhe.komiho` ｜ `1.5.1-beta (15)` ｜ Android 8.0+
+
+[![Download](https://img.shields.io/badge/Download-Release-2ea043?style=for-the-badge)](https://github.com/a245888295-dot/Komiho/releases/latest)
+[![Changelog](https://img.shields.io/badge/Changelog-v1.5.1--beta-blue?style=for-the-badge)](./CHANGELOG.en.md)
 
 [English](./README.en.md) | [中文](./README.md)
 
@@ -16,69 +19,99 @@ Package `cn.ruzhe.komiho` ｜ Version 1.5.0 (14) ｜ Android 8.0+
 
 ---
 
+## ⬇️ Download
+
+> **This is a Beta build**
+> `v1.5.1-beta` is a test build whose features and stability are still being validated.
+> It will be folded into a stable release once verified. Please report issues via
+> "About → Feedback & suggestions".
+
+**→ [Download the latest APK from Releases](https://github.com/a245888295-dot/Komiho/releases/latest)**
+
+1. Download `komiho-*.apk` (`arm64-v8a`, covers almost all devices)
+2. Allow "install unknown apps" and install
+3. Pick a comic source on first launch
+
+> Image enhancement (NPU) additionally needs the model package: `komiho-model-v81.apk`
+> from the same release page (Qualcomm SoCs only).
+
+---
+
+## 🆕 What's new in v1.5.1-beta
+
+- **No more black screens when paging fast** — pages render as the original image immediately; 0.6 s after paging stops the current page is re-enhanced and the following pages are prewarmed (Settings → Image → can be disabled)
+- **Preload page count now really works** — the prepared-result cache ceiling is raised from 4 to 12 pages, so the configured depth is actually preloaded and cached
+- **Memory-budget eviction** — enhanced bitmaps are only evicted once the total exceeds 768 MB, instead of a hard page-count cap
+- **Prewarm jobs are no longer wasted** — turning a page only drops targets that have drifted out of the prefetch window
+
+See [CHANGELOG.en.md](./CHANGELOG.en.md) for the full list.
+
+---
+
 ## ✨ Features
 
 ### 📚 Multi-source reading
 
-Komiho unifies comics from different sources into a single browsing and reading experience:
+Komiho unifies every source into one browsing and reading experience:
 
-* **Komga** — Connect to a self-hosted Komga server; browse libraries, series and books, with multi-server and multi-library support and reading-progress sync.
-* **Local files** — Browse and read comic files directly on your device.
-* **WebDAV** — Connect to WebDAV services (e.g. a NAS) and read remote comics online without downloading the whole book.
-* **SMB / CIFS** — Access shared folders on your LAN and read networked comics directly.
+* **Komga** — connect to your self-hosted Komga; browse libraries, series and books, with multi-server, multi-library and reading-progress sync
+* **Local files** — browse and read comics stored on the device
+* **WebDAV** — connect to a NAS or any WebDAV server; browse and read remotely without downloading whole books
+* **SMB / CIFS** — access LAN shares and read network comics directly
 
 ### 📦 Supported formats
 
-Format support differs slightly by source:
+* **Direct read (local / WebDAV / SMB)**: `CBZ` `CBR` `CB7` `CBT` `ZIP` `RAR` `7Z` `TAR` `PDF` `EPUB` `MOBI` `AZW3` `AZW`, plus **loose-image folders** (just put images in a directory)
+* **Via Komga**: page rendering is handled server-side, supporting everything Komga supports (except EPUB)
 
-* **Local / WebDAV / SMB direct reading**: comic archives `CBZ` `CBR` `CB7` `CBT` `ZIP` `RAR` `7Z` `TAR` `PDF` `EPUB`, and **loose-image folders** (just drop images into a directory).
-* **Via a Komga server**: Komga does the page conversion server-side and supports all the formats Komga supports (except `EPUB`); the client reads the converted image pages.
+### 📖 Reading experience
 
-### 📖 Full reading experience
+Built on the MihonSY reader and continuously tuned for real use:
 
-Based on the MihonSY reader, and continuously optimized for real reading:
+* Horizontal / vertical / webtoon modes
+* LTR / RTL, single / dual page
+* Pinch-zoom and gestures, adjustable animations and scrolling
+* Reading-progress memory, history and bookmarks
+* **E-Ink mode**: Settings → Appearance, dedicated grayscale rendering for e-ink screens
+* Reading backgrounds: solid / parchment / kraft
 
-* Horizontal paging / vertical paging / webtoon
-* LTR / RTL
-* Single page / double page
-* Zoom and gesture control
-* Smooth tap-to-page and animation
-* Adjustable reading animation and scroll behavior
-* Reading progress memory
-* History and bookmarks
+### 🖼️ Image enhancement (super-resolution)
 
-### 🕘 History & bookmarks
+Built-in enhancement on **CPU / GPU / NPU**, tuned for manga line art and balancing quality, speed and memory.
 
-Full-featured history, reading progress and bookmarks, so you can quickly resume reading, find recently read items, and save important pages.
+* **NPU** (Qualcomm QNN/HTP, requires the model package): fastest, measured around 0.9 s/page
+* **GPU** (NCNN Vulkan): broad compatibility
+* **CPU**: fallback
 
-### 🖼️ Image enhancement
+> Notes:
+> * Enhancement runs at the decode stage; the first GPU/NPU launch waits for engine init
+> * `AnimeVideo` suits colour comics, `Omni-Mini` suits black-and-white manga, `Omni-Turbo` is stronger but slower
+> * GPU tile size affects throughput; 192 is recommended
+> * NPU models may show slight colour shift — a speed/quality trade-off, not a bug
 
-Built-in image enhancement runs on CPU / GPU / NPU (Qualcomm SoC only; requires downloading the matching model pack).
+### 🖥️ Phones, tablets and large screens
 
-Tuned for manga line art, balancing quality, speed and memory usage.
-
-## Special notes
-
-Komiho's image enhancement runs at the decode stage; please allow some time on first launch with GPU / NPU.
-AnimeVideo suits color comics better, Omni-Mini suits black-and-white comics, and Omni-Turbo is more powerful but slower.
-GPU tile size affects processing speed; 192 is recommended.
-For the best experience, choose a model that fits your device.
-
-NPU models may show slight color shift — a trade-off for speed and performance, not a bug.
-
-### 🖥️ Tablet & large screen
-
-Adaptive layouts for phones, tablets and large screens, with navigation that can sit at the bottom, left or right.
+Adaptive layouts for phones, tablets and large screens, with bottom / left / right navigation.
 
 ---
 
 ## ⚠️ Notes
 
-The Komga feature requires connecting to your own **Komga server**.
-Komiho does not provide any comic content; please respect copyright.
+* The Komga feature requires **your own Komga server**
+* Komiho ships no comic content; please respect copyright
+
+---
+
+## 👤 About
+
+* **Author**: [a245888295-dot](https://github.com/a245888295-dot)
+* **AI collaboration**: DeepSeek V4.1
+
+This is an independent branch in its testing phase and is not yet open for external contribution.
+Feedback is welcome via "About → Feedback & suggestions".
 
 ---
 
 ## 📝 Changelog
 
-See [CHANGELOG.en.md](./CHANGELOG.en.md) ([中文](./CHANGELOG.md)).
+See [CHANGELOG.en.md](./CHANGELOG.en.md) (and [中文](./CHANGELOG.md)).

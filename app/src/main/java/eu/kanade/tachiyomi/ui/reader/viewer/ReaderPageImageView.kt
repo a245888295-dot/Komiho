@@ -612,7 +612,13 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     .diskCachePolicy(CachePolicy.DISABLED)
                     // Komiho: enhanced 只表达「真增强」。E-Ink 灰阶化开启时也要走这条链，
                     // 但不能因此把解码目标抬到 2048 再回缩 —— 那是白跑一趟高分辨率解码。
-                    .enhanced(preferences.enhancementMode.get() != 0 && !this@ReaderPageImageView.skipEnhance)
+                    // Komiho (2026-10-21): 快速翻页期间不请求增强（原图直出，几十~几百毫秒），
+                    // 停下 600ms 后由 PagerViewer 把 rapidPaging 置回 false 并重渲染这一页。
+                    .enhanced(
+                        preferences.enhancementMode.get() != 0 &&
+                            !this@ReaderPageImageView.skipEnhance &&
+                            !(Waifu2x.rapidPaging && preferences.aiSkipEnhanceWhilePaging.get()),
+                    )
                     .customDecoder(true)
                     // Komiho: webtoon 原始尺寸模式（1:1 显示）不下调 AI 面积回缩 ——
                     // 没有缩小就没有摩尔纹，回缩只会丢细节。

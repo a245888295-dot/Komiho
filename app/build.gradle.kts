@@ -34,8 +34,10 @@ android {
 
         // Komiho: 正式版按 `chore: 版本号 x.y.z 并同步 changelog [release]` 发 ——
         // 工作流用这里的 versionName 组 tag（v{versionName}）并从 CHANGELOG*.md 抽该版本段落当说明，所以两者必须一致。
+        // Komiho (2026-10-21): 测试版带 -beta 后缀 —— 与正式版 tag（v1.5.x）天然分开，
+        // 装上后 versionName 一眼能看出是测试包。稳定后再归入正式版本。
         versionCode = 15
-        versionName = "1.5.1"
+        versionName = "1.5.1-beta"
 
         buildConfigField("String", "UPSTREAM_VERSION", """"0.20.1"""")
 

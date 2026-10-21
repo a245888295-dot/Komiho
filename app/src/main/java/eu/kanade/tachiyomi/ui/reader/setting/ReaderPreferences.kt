@@ -339,6 +339,15 @@ class ReaderPreferences(
     /** 预加载页数（分页模式的预热深度；档位对齐 komikku 的 1/2/3/5/8，默认 3）。 */
     val aiPreloadPages: Preference<Int> = preferenceStore.getInt("pref_ai_preload_pages", 3)
 
+    /**
+     * Komiho (2026-10-21): 快速翻页期间跳过 AI 增强。
+     *
+     * 开着时：翻页瞬间只出原图（几十~几百毫秒），停下来 600ms 后再补超分并预热后面几页。
+     * 关掉时：回到旧行为 —— 每翻一页都立刻超分，翻得快就一直等（0.9s/页 的物理下限）。
+     */
+    val aiSkipEnhanceWhilePaging: Preference<Boolean> =
+        preferenceStore.getBoolean("pref_ai_skip_enhance_while_paging", true)
+
     // DSH: 模型四轴（对齐 komikku 的 模型 / 降噪等级 / 放大倍数 / 精度）。
     // 真正的模型 id 仍写在 [aiModelId]（由 AiModelAxes 解析后回写），增强链路只认它。
     // 下标与 komikku 一致：降噪 0=无 1=1x 2=2x 3=3x 4=保守；精度 0=FP16 2=INT8。

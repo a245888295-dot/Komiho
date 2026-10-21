@@ -5176,6 +5176,15 @@ private fun KomgaAbout(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            // Komiho (2026-10-21): 作者与 AI 协作署名。作者是仓库所有者；AI 协作标注的是
+            // 参与本版开发的模型，方便用户判断「这一版是谁在维护」。
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "作者 a245888295-dot ｜ AI 协作 DeepSeek V4.1",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
 
         Spacer(Modifier.height(20.dp))

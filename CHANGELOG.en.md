@@ -1,7 +1,10 @@
 # Komiho Changelog
 
-## v1.5.1 (2026-10-21)
+## v1.5.1-beta (2026-10-21)
 
+> Beta: this is a test build; features and stability are still being validated. It will be folded into a stable release once verified.
+
+- New Skip AI enhancement while paging fast: pages render as the original image immediately (no black screen), and 0.6 s after paging stops the current page is re-enhanced and the following pages are prewarmed (Settings → Image → can be disabled to restore the old wait-for-enhancement behavior)
 - Improved Preload page count now actually takes effect: the prepared-result cache ceiling is raised from 4 to 12 pages, so the configured depth is really preloaded and cached (previously 8 pages only yielded 4)
 - Improved Prepared-result cache evicts by memory budget instead of a fixed page count: enhanced bitmaps are only evicted once the total exceeds 768 MB
 - Improved Turning a page no longer cancels queued prewarm jobs — only targets that have drifted out of the prefetch window are dropped, cutting redundant inference during fast paging

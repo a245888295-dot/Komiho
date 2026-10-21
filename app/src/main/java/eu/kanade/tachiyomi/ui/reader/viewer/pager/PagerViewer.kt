@@ -371,8 +371,40 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             adapter.nextTransition?.to?.let(activity::requestPreloadChapter)
         }
 
-        // SY（A）：相邻页预热（前+后各一页），解码好等用户翻
-        prewarmAdjacentPages(forward)
+        // Komiho (2026-10-21): 不再「翻页即预热」—— 先让渲染层出原图（几十~几百毫秒），
+        // 翻页停止 600ms 后才补超分并预热后面几页。见 scheduleEnhanceAfterSettle。
+        scheduleEnhanceAfterSettle(forward)
+    }
+
+    /** 翻页稳定计时器（见 [scheduleEnhanceAfterSettle]）。 */
+    private var settleJob: Job? = null
+
+    /**
+     * Komiho (2026-10-21): 「快速翻页 = 普通加载，停下 = 超分 + 排队预热」。
+     *
+     * 快速翻页时把 [Waifu2x.rapidPaging] 置 true：渲染层请求的是**不增强**的版本，原图直出，
+     * 不占 NPU、不黑屏；同时不启动预热（预热目标会随翻页漂移，纯白烧推理）。
+     * 翻页停止 [SETTLE_DELAY_MS] 后置回 false，重渲染当前页（原图 → 超分）并开始预热后面几页。
+     *
+     * 开关（设置 → 图像 → 快速翻页时跳过 AI 增强）关掉时走旧行为：立即预热、每页都等超分。
+     */
+    private fun scheduleEnhanceAfterSettle(forward: Boolean) {
+        if (!readerPrefs.aiSkipEnhanceWhilePaging.get()) {
+            Waifu2x.rapidPaging = false
+            prewarmAdjacentPages(forward)
+            return
+        }
+        settleJob?.cancel()
+        Waifu2x.rapidPaging = true
+        settleJob = scope.launch {
+            delay(SETTLE_DELAY_MS)
+            Waifu2x.rapidPaging = false
+            prewarmLog("settle: rapid-paging ended, re-enhance current page")
+            (currentPage as? ReaderPage)?.let { page ->
+                getPageHolder(page)?.rerenderAfterImageSettingsChange()
+            }
+            prewarmAdjacentPages(forward)
+        }
     }
 
     /**
@@ -770,3 +802,11 @@ private const val KOMIHA_REBUILD_TAG = "Waifu2xRebuild"
 
 /** Komiho: 适配器重建的合并窗口 —— 把同一批 register 首发回调并成一次重建。 */
 private const val REFRESH_COALESCE_DELAY_MS = 120L
+
+/**
+ * Komiho (2026-10-21): 翻页停止多久才补超分。
+ *
+ * 0.6s 的取舍：比它短，用户只是「顿一下」就翻走会白算一次 0.9s 的推理；
+ * 比它长，停下来第一秒看到的是原图。实测单页增强 0.9s，0.6s 后启动能接上阅读节奏。
+ */
+private const val SETTLE_DELAY_MS = 600L
