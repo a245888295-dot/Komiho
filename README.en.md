@@ -63,6 +63,37 @@ See [CHANGELOG.en.md](./CHANGELOG.en.md) for the full list.
 
 ---
 
+## 🔧 Changes on this branch (after v1.5.0)
+
+These were developed on this branch after the v1.5.0 release:
+
+### Reading and enhancement scheduling
+
+- **Skip enhancement while paging fast** — pages render as the original image immediately; 0.6 s after paging stops the current page is re-enhanced and the following pages are prewarmed
+- **"Enhancing…" overlay** — no more half-enhanced frames while the engine works
+- **Collapsible enhancement badge** — per page it shows the engine, elapsed time and the exact skip reason (e.g. "waiting to retry" when preempted)
+- **No CPU fallback in AI modes** — an NPU failure now keeps the original image and retries, instead of silently degrading to CPU
+- **Force-AI-enhance for large images** wired through both gates and enabled by default
+- Fixed "page never refreshes after falling back to CPU super-resolution"
+
+### Models and settings
+
+- **Model selection rebuilt as Komikku's four axes**: family / denoise level / scale / precision
+- Aligned with three Komikku settings: max processing resolution, max resolution (skip above it), preload pages
+- **AI scale now follows the selected model's scale**, supporting 3x models
+
+### Preload and cache
+
+- **Preload depth now really takes effect**: cache ceiling raised from 4 to 12 pages
+- **Memory-budget cache**: enhanced bitmaps are evicted only once the total exceeds 768 MB
+- **Paging no longer cancels queued prewarm jobs** — only targets that drifted out of the prefetch window are dropped
+
+### Build
+
+- The model-package workflow now reuses the host keystore cache, fixing "Tag number over 30"
+
+---
+
 ## ✨ Features
 
 ### 📚 Multi-source reading
