@@ -48,6 +48,21 @@ See [CHANGELOG.en.md](./CHANGELOG.en.md) for the full list.
 
 ---
 
+## 🕘 Release history
+
+| Version | Highlights |
+|---|---|
+| **v1.5.1-beta** | Skip enhancement while paging fast (re-enhance after settling), preload depth now really takes effect (12 pages), memory-budget cache eviction |
+| **v1.5.0** | E-Ink mode, MOBI / AZW3 / AZW support, parchment / kraft reading backgrounds, deep crop by connected-component bounding box, feedback entry |
+| **v1.4.1** | WebDAV sync, moiré reduction, progress-bar thumbnails, diagnostic log export, Real-CUGAN Pro/SE NPU models, PDF covers and page counts |
+| **v1.3.1** | Force-AI-enhance for large images, badge showing output resolution, "opening" indicator, remote-cache progress animation |
+| **v1.3.0** | PDF reading over local / WebDAV / SMB, file-browser search, denoise, natural sorting |
+| **v1.2.0** | AI super-resolution (GPU / NPU), source manager and startup region, loose-image folders with auto-continue, tunable read caches, Komga downloads |
+| **v1.1.0** | Local / WebDAV / SMB browsing, bookmarks and history, unified source management |
+| **v1.0.6** | First release: multi-server Komga, library / series / book browsing, full reader |
+
+---
+
 ## ✨ Features
 
 ### 📚 Multi-source reading
