@@ -1,5 +1,12 @@
 # Komiho Changelog
 
+## v1.5.1 (2026-10-21)
+
+- Improved Preload page count now actually takes effect: the prepared-result cache ceiling is raised from 4 to 12 pages, so the configured depth is really preloaded and cached (previously 8 pages only yielded 4)
+- Improved Prepared-result cache evicts by memory budget instead of a fixed page count: enhanced bitmaps are only evicted once the total exceeds 768 MB
+- Improved Turning a page no longer cancels queued prewarm jobs — only targets that have drifted out of the prefetch window are dropped, cutting redundant inference during fast paging
+- Improved The "Preload pages" summary in settings now reflects the real capacity
+
 ## v1.5.0 (2026-10-14)
 
 - New E-Ink mode (Settings → Appearance): the reader switches to a dedicated E-Ink grayscale mode. Tested on a limited set of devices — feedback and suggestions are welcome
