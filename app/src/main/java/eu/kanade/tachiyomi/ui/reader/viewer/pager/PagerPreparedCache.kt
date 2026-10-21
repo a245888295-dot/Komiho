@@ -79,13 +79,33 @@ class PagerPreparedPage(
  * ReaderPage 未覆写 equals/hashCode → Pair 作键即身份键；章节重载会生成新 Page 对象，
  * 天然不会命中旧条目，旧条目由 LRU 淘汰。
  */
-class PagerPreparedCache(private val maxSize: Int = 3) {
+class PagerPreparedCache(
+    private val maxSize: Int = 3,
+    /**
+     * Komiho (2026-10-21): 位图内存预算。
+     *
+     * 以前容量被 `coerceIn(2, 4)` 死锁在 4 页，理由是「3x 一份预处理位图约 100MB」——
+     * 但那条估算按的是 2048 级别中间图，实际缓存的是**屏幕尺寸**位图（`Precision.INEXACT`），
+     * 2944×1840 的平板一页约 21MB，8 页 ≈ 170MB，12 页 ≈ 250MB。
+     *
+     * 注意区分两种「内存」：App 的 Java 堆上限是 512MB（`dalvik.vm.heapsize`），但 Android 8
+     * 以后 Bitmap 像素在 native 堆，不吃这 512MB；本机 15.2GB 物理内存、可用 6.2GB，
+     * 250MB 位图对系统毫无压力。所以预算是「防呆」而不是「防 OOM」——768MB 足够 12 页。
+     */
+    private val maxBytes: Long = 768L * 1024 * 1024,
+) {
 
     /** DSH: 缓存容量 —— 预热深度不能超过它（超了算完就被淘汰，纯白烧推理）。 */
     val capacity: Int get() = maxSize
 
     private val lock = Any()
     private val map = LinkedHashMap<Pair<ReaderPage, ReaderPage?>, PagerPreparedPage>(8, 0.75f, true)
+
+    /** 当前缓存里增强位图的总字节数（只算 [PagerPreparedPage.decodedBitmap]，原图流另算）。 */
+    private var totalBytes = 0L
+
+    private fun bitmapBytes(value: PagerPreparedPage): Long =
+        value.decodedBitmap?.allocationByteCount?.toLong() ?: 0L
 
     fun key(page: ReaderPage, extraPage: ReaderPage?): Pair<ReaderPage, ReaderPage?> = page to extraPage
 
@@ -104,11 +124,15 @@ class PagerPreparedCache(private val maxSize: Int = 3) {
     }
 
     fun put(key: Pair<ReaderPage, ReaderPage?>, value: PagerPreparedPage) = synchronized(lock) {
+        // 同键覆盖先把旧条目的字节数扣掉，否则重复预热会把 totalBytes 越算越大。
+        map.remove(key)?.let { totalBytes -= bitmapBytes(it) }
         map[key] = value
-        while (map.size > maxSize) {
+        totalBytes += bitmapBytes(value)
+        while (map.size > maxSize || totalBytes > maxBytes) {
             val it = map.entries.iterator()
             if (!it.hasNext()) break
-            it.next()
+            val eldest = it.next()
+            totalBytes -= bitmapBytes(eldest.value)
             it.remove()
         }
     }
@@ -117,9 +141,14 @@ class PagerPreparedCache(private val maxSize: Int = 3) {
      * Komiho (2026-10-13): 作废指定条目。停顿补算（`PagerPageHolder.maybeReEnhance`）用：
      * 缓存里那份是**未增强**的位图，不删的话回翻再命中还是原图。
      */
-    fun remove(key: Pair<ReaderPage, ReaderPage?>) = synchronized(lock) { map.remove(key) }
+    fun remove(key: Pair<ReaderPage, ReaderPage?>) = synchronized(lock) {
+        map.remove(key)?.let { totalBytes -= bitmapBytes(it) }
+    }
 
-    fun clear() = synchronized(lock) { map.clear() }
+    fun clear() = synchronized(lock) {
+        map.clear()
+        totalBytes = 0L
+    }
 }
 
 /**

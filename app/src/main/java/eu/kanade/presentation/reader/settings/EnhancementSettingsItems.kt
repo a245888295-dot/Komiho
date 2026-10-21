@@ -180,8 +180,12 @@ internal fun AiAdvancedOptions(preferences: ReaderPreferences) {
             )
         }
     }
+    // Komiho (2026-10-21): 文案跟着真实容量走。以前写死「上限 4 页」，因为 PagerViewer 把
+    // 容量 coerceIn(2, 4) 掐死了；现在容量 = 用户设置（1..12），内存由 384MB 字节预算兜底。
+    val cacheCap = preloadPages.coerceIn(1, 12)
     Text(
-        text = "每页一次推理（3x 约 1.5s/页）；预处理缓存上限 4 页，超过的深度不会生效",
+        text = "每页一次推理（3x 约 0.9–1.5s/页）；预处理缓存 $cacheCap 页，" +
+            "增强位图总量超 768MB 时淘汰最旧页",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(

@@ -67,12 +67,21 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     // SY（A+B，Page 流畅度优化）：预处理结果缓存 + 相邻页预热。
     // 借鉴 webtoon「解码好了等你滑」：翻页选定后，后台提前把相邻页的
     // stream 物化/处理/增强预解码做完，holder 实例化时直接命中缓存。
-    // DSH: 容量跟「预加载页数」走，但**收在 2..4** —— 3x 模型一份预处理位图约 100MB，
-    // 用户填 8 也只是白占内存（缓存是 LRU，超出容量的预热算完就被淘汰）。
-    // ⚠️ 用 lazy：偏好要等 Injekt 就绪，属性初始化顺序早于它（readerPrefs 声明在文件后段）。
-    val preparedCache: PagerPreparedCache by lazy {
-        PagerPreparedCache(maxSize = readerPrefs.aiPreloadPages.get().coerceIn(2, 4))
-    }
+    // Komiho (2026-10-21): 容量跟「预加载页数」走，不再死收在 2..4 —— 以前用户设 8 页也只
+    // 预热/缓存 4 页（UI 底部那行「上限 4 页」就是它）。内存改由 PagerPreparedCache 的
+    // 字节预算（768MB）兜底：屏幕尺寸位图一页约 20MB，12 页约 250MB，本机 16GB 物理内存
+    // 完全放得下；真遇到超大位图也是 LRU 淘汰最旧的，而不是从一开始就掐死深度。
+    // ⚠️ 用「按需重建」而不是 lazy：用户在阅读器里把 4 页改成 8 页后，容量要立刻跟上，
+    // 否则新深度预热出来的页会被旧容量当垃圾淘汰。重建只在设置变化时发生，代价是丢一次缓存。
+    private var preparedCacheInstance: PagerPreparedCache? = null
+
+    val preparedCache: PagerPreparedCache
+        get() {
+            val desired = readerPrefs.aiPreloadPages.get().coerceIn(1, 12)
+            val existing = preparedCacheInstance
+            if (existing != null && existing.capacity == desired) return existing
+            return PagerPreparedCache(maxSize = desired).also { preparedCacheInstance = it }
+        }
 
     /** 预热串行锁：避免前后两页同时跑 Lanczos 预解码打满 CPU（教训同 offscreen 调高）。 */
     private val prewarmMutex = kotlinx.coroutines.sync.Mutex()
@@ -427,12 +436,16 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             prewarmLog("launch pos=$position page=${next.index} gen=$generation")
             scope.launchIO {
                 prewarmMutex.withLock {
-                    // Komiho P1：等锁期间用户可能又翻了页 —— 目标过期就放弃，否则会白跑
-                    // 一次昂贵的增强（GPU 1–3 秒），把真正需要的页面继续往后推。
-                    if (generation != prewarmGeneration.get()) {
+                    // Komiho (2026-10-21): 不再「翻一页就作废全部排队预热」。
+                    // 原先 generation 一变，等锁的 2~3 个任务全被丢掉（实测 618 次启动里
+                    // 84 次 stale-gen 白跑），翻得快时预热永远填不满，翻到哪页都得现算。
+                    // 现在只放弃「已经跑出预取窗口」的目标；窗口内的照常算完 —— NPU 反正
+                    // 单引擎串行，早算完早缓存，总比丢掉重来强。
+                    val distance = abs(position - pager.currentItem)
+                    if (distance > preloadDepth + 1) {
                         prewarmLog(
-                            "abort page=${next.index} reason=stale-gen " +
-                                "gen=$generation now=${prewarmGeneration.get()}",
+                            "abort page=${next.index} reason=stale-window " +
+                                "distance=$distance gen=$generation now=${prewarmGeneration.get()}",
                         )
                         return@withLock
                     }
