@@ -16,6 +16,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -149,9 +151,12 @@ private fun OnboardingWelcome(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .systemBarsPadding()
-            .padding(horizontal = 24.dp),
+            // Komiho (2026-10-21): 横屏时 4 张来源卡 + 标题会超过一屏高度，
+            // 原先没有滚动 → 底部「开始使用」按钮被挤出屏幕，用户按不到。
+            // 加垂直滚动并给上下留白：竖屏仍近似居中，横屏可以滚到底。
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
         // SY --> Komiho: 欢迎页顶图用真实 APP 启动图标。不能用 painterResource(R.mipmap.ic_launcher)：
         // API 26+ 会解析到 mipmap-anydpi-v26 的自适应图标 XML（AdaptiveIconDrawable），

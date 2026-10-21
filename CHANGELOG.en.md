@@ -1,5 +1,11 @@
 # Komiho Changelog
 
+## v1.5.2-beta (2026-10-21)
+
+- Fixed Cold start still opened the welcome screen after a local source was configured, asking the user to pick a source again (the launcher check missed "All files access" and a custom browse root)
+- Fixed The "Get started" button on the welcome screen was pushed off-screen and unclickable in landscape (the screen is now scrollable)
+- Fixed The what's-new dialog lacked the new release notes (it reads the packaged changelog resource, which was not in sync with CHANGELOG.md)
+
 ## v1.5.1-beta (2026-10-21)
 
 > Beta: this is a test build; features and stability are still being validated. It will be folded into a stable release once verified.
