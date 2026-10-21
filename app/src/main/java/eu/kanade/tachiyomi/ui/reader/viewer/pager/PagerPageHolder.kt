@@ -287,6 +287,22 @@ class PagerPageHolder(
     }
 
     /**
+     * Komiho (2026-10-21): 快速翻页停下后补一次增强。
+     *
+     * 与 [rerenderAfterImageSettingsChange] 的关键区别：**不** cancel 当前 loadJob、**不**重走
+     * 整条 `preparePure` 流水线，只沿用已经解出来的源（[appliedSource]）重新请求一次增强位图。
+     *
+     * 为什么不用重渲染：实测里重渲染会把正在应用的位图中途取消，之后没有任务再补上 ——
+     * 角标已经是 `NPU OK`，画面却停在黑色。补算只做「替换画面」，原图一直在，最坏也就是保持原图。
+     */
+    internal fun requestEnhanceAfterSettle() {
+        if (!isAttachedToWindow) return
+        if (!viewer.isCurrentItem(item)) return
+        refreshEnhancementBadgeState(currentImageEnhanced)
+        maybeReEnhance("rapid-paging-settled")
+    }
+
+    /**
      * Called when this view is detached from the window. Unsubscribes any active subscription.
      */
     @SuppressLint("ClickableViewAccessibility")

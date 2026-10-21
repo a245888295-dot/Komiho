@@ -400,8 +400,12 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             delay(SETTLE_DELAY_MS)
             Waifu2x.rapidPaging = false
             prewarmLog("settle: rapid-paging ended, re-enhance current page")
+            // Komiho (2026-10-21 修正): 这里**不能**用 rerenderAfterImageSettingsChange ——
+            // 它会 cancel loadJob 重走整条 preparePure 流水线，位图在中途被取消后没人补，
+            // 表现就是「角标已经是 NPU OK，画面还是黑的」。改为走 holder 的轻量补算：
+            // 沿用已经解出来的源重新请求一次增强，原图始终留在屏幕上，只会被替换不会被清空。
             (currentPage as? ReaderPage)?.let { page ->
-                getPageHolder(page)?.rerenderAfterImageSettingsChange()
+                getPageHolder(page)?.requestEnhanceAfterSettle()
             }
             prewarmAdjacentPages(forward)
         }
