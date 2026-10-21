@@ -150,11 +150,16 @@ Adaptive layouts for phones, tablets and large screens, with bottom / left / rig
 
 ## 👤 About
 
-This is a **personal, self-use** independent branch. It is not an official project and does not
-represent the position of any upstream project.
+This is a **personal, self-use** branch: not an official project, not representing any upstream
+position, and with no commercial plans.
+
+Most changes come from everyday use — whatever makes reading more comfortable, without a grand
+roadmap. If it happens to suit you too, feel free to use it; if not, no hard feelings.
 
 * **Author**: [a245888295-dot](https://github.com/a245888295-dot)
-* **AI collaboration**: DeepSeek V4.1
+* **AI collaboration**: DeepSeek V4.1 (code and documentation)
+
+> **Disclaimer**: this app does not produce manga, it just carries it. All content comes from your own Komga / NAS / local files; copyright belongs to the original authors.
 
 Feedback is welcome via "About → Feedback & suggestions".
 
